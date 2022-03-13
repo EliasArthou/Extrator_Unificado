@@ -1,0 +1,14 @@
+/venv
+/Downloads
+/Profile
+/.idea
+/build
+/dist
+Scai.WMB
+sensiveis.py
+chromedriver.exe
+Scai_18_01_22.WMB
+main.spec
+Scai_18_01_22.ldb
+*.xlsx
+favicon.ico
