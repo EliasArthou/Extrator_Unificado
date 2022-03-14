@@ -51,8 +51,8 @@ def msgbox(text, style, title):
     """
 
     :param text: texto da mensagem.
-    :param style: tipo de messagebox
-    :param title:
+    :param 'style': tipo do messagebox.
+    :param title: título da janela.
     :return:
     """
     return ctypes.windll.user32.MessageBoxW(None, text, title, style)

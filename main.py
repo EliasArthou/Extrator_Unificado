@@ -1,5 +1,5 @@
 
-"""
+
 from janela import App
 
 app = App()
@@ -11,3 +11,4 @@ import condominios
 
 linha = ['1095', 'JOSE AROLDO', '010203', 'APSA', 'META OFFICE BUILDING - 3437.6394', '']
 condominios.APSA(linha)
+"""

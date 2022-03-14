@@ -5,8 +5,7 @@ Constrói a janela
 import sys
 import tkinter as tk
 from tkinter import ttk
-from extracao import extrairboletosbombeiro, extrairboletosiptu
-import messagebox as msg
+import extracao
 
 
 class App(tk.Tk):
@@ -26,8 +25,9 @@ class App(tk.Tk):
         self.data3 = None
         self.c1 = None
         self.c2 = None
-        self.var1 = None
-        self.var2 = None
+        self.tipoextracao = ''
+        self.somentevalores = None
+        self.codigosdebarra = None
         self.executar = None
 
         w = 450
@@ -81,13 +81,13 @@ class App(tk.Tk):
         self.labelstatus.configure(anchor='center')
 
         # Extrair somente valores
-        self.var1 = tk.BooleanVar()
+        self.somentevalores = tk.BooleanVar()
 
         # Salvar Código de Barras no BD
-        self.var2 = tk.BooleanVar()
+        self.codigosdebarra = tk.BooleanVar()
 
-        self.radio_valor = tk.IntVar()
-        self.radio_valor.set(2)  # Para a segunda opção ficar marcada
+        self.tipopagamento = tk.IntVar()
+        self.tipopagamento.set(2)  # Para a segunda opção ficar marcada
         self.manipularradio(self.tipoextracao.get())
 
         # button Iniciar Extração
@@ -113,14 +113,15 @@ class App(tk.Tk):
         self.mudartexto('labelstatus', '')
         self.configurarbarra('barraextracao', 1, 0)
         if len(tipoextracao) > 0:
-            self.c1 = tk.Checkbutton(self, text='Somente Valores', variable=self.var1, onvalue=True, offvalue=False, font="Arial 10")
-            self.c1.place(relx=0.046, y=142)
+            if criarradio:
+                self.c1 = tk.Checkbutton(self, text='Somente Valores', variable=self.somentevalores, onvalue=True, offvalue=False, font="Arial 10")
+                self.c1.place(relx=0.046, y=142)
             self.executar.state(["!disabled"])
         else:
             if self.executar is not None:
                 self.executar.state(["disabled"])
-            if self.c1 is not None:
-                self.c1.destroy()
+            # if self.c1 is not None:
+            #    self.c1.destroy()
 
         match tipoextracao:
             case 'Bombeiros':
@@ -128,34 +129,35 @@ class App(tk.Tk):
                     # Criando os radio buttons e o label
                     self.labelradio = ttk.Label(self, text='Extrair qual tipo de pagamento?')
                     self.labelradio.place(relx=0.05, y=100)
-                    self.cotaunica = ttk.Radiobutton(self, text='Cota Única', variable=self.radio_valor, value=1)
+                    self.cotaunica = ttk.Radiobutton(self, text='Cota Única', variable=self.tipopagamento, value=1)
                     self.cotaunica.place(relx=0.05, y=120)
-                    self.cotaparcelada = ttk.Radiobutton(self, text='Parcelado', variable=self.radio_valor, value=2)
+                    self.cotaparcelada = ttk.Radiobutton(self, text='Parcelado', variable=self.tipopagamento, value=2)
                     self.cotaparcelada.place(relx=0.25, y=120)
-                    self.radio_valor.set(2)
+                    self.tipopagamento.set(2)
 
                 else:
                     self.labelradio.destroy()
                     self.cotaunica.destroy()
                     self.cotaparcelada.destroy()
+                    # self.c1.destroy()
 
             case 'IPTU':
                 if criarradio:
                     # Criando os radio buttons e o label
                     self.labelradio = ttk.Label(self, text='Extrair qual data?')
                     self.labelradio.place(relx=0.05, y=100)
-                    self.cotaunica = ttk.Radiobutton(self, text='Cota Única', variable=self.radio_valor, value=1)
+                    self.cotaunica = ttk.Radiobutton(self, text='Cota Única', variable=self.tipopagamento, value=1)
                     self.cotaunica.place(relx=0.05, y=120)
-                    self.data1 = ttk.Radiobutton(self, text='Data 1', variable=self.radio_valor, value=2)
+                    self.data1 = ttk.Radiobutton(self, text='Data 1', variable=self.tipopagamento, value=2)
                     self.data1.place(relx=0.25, y=120)
-                    self.data2 = ttk.Radiobutton(self, text='Data 2', variable=self.radio_valor, value=3)
+                    self.data2 = ttk.Radiobutton(self, text='Data 2', variable=self.tipopagamento, value=3)
                     self.data2.place(relx=0.4, y=120)
-                    self.data3 = ttk.Radiobutton(self, text='Data 3', variable=self.radio_valor, value=4)
+                    self.data3 = ttk.Radiobutton(self, text='Data 3', variable=self.tipopagamento, value=4)
                     self.data3.place(relx=0.55, y=120)
-                    self.radio_valor.set(2)
                     # "Checkbutton" para subir os códigos de barras
-                    self.c2 = tk.Checkbutton(self, text='Subir Código de Barras', variable=self.var2, onvalue=True, offvalue=False, font="Arial 10")
+                    self.c2 = tk.Checkbutton(self, text='Subir Código de Barras', variable=self.codigosdebarra, onvalue=True, offvalue=False, font="Arial 10")
                     self.c2.place(relx=0.45, y=142)
+                    self.tipopagamento.set(2)
 
                 else:
                     self.labelradio.destroy()
@@ -163,6 +165,8 @@ class App(tk.Tk):
                     self.data1.destroy()
                     self.data2.destroy()
                     self.data3.destroy()
+                    # self.c1.destroy()
+                    # self.c2.destroy()
 
             case _:
                 if self.labelradio is not None:
@@ -179,8 +183,10 @@ class App(tk.Tk):
                     self.cotaunica.destroy()
                 if self.cotaparcelada is not None:
                     self.cotaparcelada.destroy()
-                if self.c2 is not None:
-                    self.c2.destroy()
+                # if self.c1 is not None:
+                #     self.c1.destroy()
+                # if self.c2 is not None:
+                #     self.c2.destroy()
 
         self.atualizatela()
 
@@ -195,6 +201,10 @@ class App(tk.Tk):
         Ação do botão
         """
         self.manipularradio(self.tipoextracao.get(), False)
+        extrator = extracao.Extrator(self)
+        extrator.controlaextracao()
+        """
+        self.manipularradio(self.tipoextracao.get(), False)
         match self.tipoextracao.get():
             case 'Bombeiros':
                 extrairboletosbombeiro(self)
@@ -204,6 +214,7 @@ class App(tk.Tk):
 
             case _:
                 msg.msgbox(f'Opção Inválida!', msg.MB_OK, 'Tempo Decorrido')
+        """
 
     def fechar_clicked(self):
         """

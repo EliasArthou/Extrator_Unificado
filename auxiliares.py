@@ -117,21 +117,24 @@ class Banco:
                     self.cursor.execute(strSQL)
                     self.conxn.commit()
 
-                strSQL = "INSERT INTO %s VALUES [" % tabela + "] ('" + "', '".join(my_list) + "')"
+                strSQL = "INSERT INTO [%s] VALUES " % tabela + " ('" + "', '".join(my_list) + "')"
                 self.cursor.execute(strSQL)
                 self.conxn.commit()
 
-            print("('" + "', '".join(my_list) + "')")
         # df.to_csv('df.csv', sep=';', encoding='utf-8', index=False)
 
         # RUN QUERY
-        strSQL = "INSERT INTO %s SELECT * FROM [text;HDR=Yes;FMT=Delimited(;);Database=D:\Projetos\Extrair Imposto\].df.csv" % tabela
+        # print(caminhoprojeto())
+        # caminho = caminhoprojeto('Downloads')
+        # strSQL = "INSERT INTO [%s] SELECT * FROM [text;HDR=Yes;FMT=Delimited(;);Database=%s].[df.csv]" % (tabela, caminho)
 
-        self.cursor.execute(strSQL)
-        self.conxn.commit()
+        # print(strSQL)
+
+        # self.cursor.execute(strSQL)
+        # self.conxn.commit()
 
         self.conxn.close()  # CLOSE CONNECTION
-        os.remove('df.csv')
+        # os.remove('df.csv')
 
     def fecharbanco(self):
         """
@@ -562,7 +565,8 @@ def hora(timezone, pedaco=''):
             case _:
                 return datetime.datetime.fromisoformat(resposta.json()['datetime'])
 
-    except Exception:
+    except Exception as e:
+        print(str(e))
         match pedaco.upper():
             case 'DATA':
                 return datetime.datetime.fromisoformat(resposta.json()['datetime']).date()
