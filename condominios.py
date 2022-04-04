@@ -42,7 +42,7 @@ def abrj (linha, objetobrowser):
                 # Campo de usuário
                 usuario = site.verificarobjetoexiste('NAME', 'cliente_usuario')
                 # Verifica se achou o campo de usuário
-                if usuario is not None:
+                # if usuario is not None:
 
     except Exception as e:
         if site is not None:
