@@ -628,7 +628,41 @@ class Extrator:
 
                     self.bd.adicionardf('Codigos IPTUs', df, 7)
 
-        # except Exception as e:
-        #     with open("Log_" + aux.acertardataatual() + ".txt", "a") as myfile:
-        #         myfile.write(str(e))
-        #     msg.msgbox("Erro! Log salvo em: " + "Log_" + aux.acertardataatual() + ".txt", msg.MB_OK, 'Erro')
+    def extraircondominio(self):
+        self.visual.acertaconfjanela(False)
+
+        pastadownload = aux.caminhoprojeto() + '\\' + 'Downloads'
+        listachaves = ['Código', 'Login', 'Senha', 'Administradora', 'Condomínio', 'Unidade', 'Resposta', 'Check de Arquivo']
+        self.listaexcel = []
+        site = web.TratarSite(senha.siteiptu, 'ExtrairBoletoCond')
+
+        for indice, linha in enumerate(self.resultado):
+            codigocliente = linha['codigo']
+            # ===================================== Parte Gráfica =======================================================
+            self.visual.mudartexto('labelcodigocliente', 'Código Cliente: ' + codigocliente)
+            iptu = str(linha['iptu'])
+            iptu = str(iptu.strip()).zfill(8)
+            iptu = '{}.{}{}{}.{}{}{}-{}'.format(*iptu)
+            self.visual.mudartexto('labelinscricao', 'Inscrição Imobiliária: ' + iptu)
+
+            self.visual.mudartexto('labelquantidade', 'Item ' + str(indice + 1) + ' de ' + str(len(self.resultado)) + '...')
+            self.visual.mudartexto('labelstatus', 'Extraindo boleto...')
+            # Atualiza a barra de progresso das transações (Views)
+            self.visual.configurarbarra('barraextracao', len(self.resultado), indice + 1)
+            time.sleep(0.1)
+            # ===================================== Parte Gráfica =======================================================
+            caminhodestino = pastadownload + '/' + codigocliente + '_' + linha['iptu'] + '.pdf'
+            if not os.path.isfile(caminhodestino):
+                if site is not None:
+                    site.fecharsite()
+                site = web.TratarSite(senha.siteiptu, 'ExtrairBoletoCond')
+                site.abrirnavegador()
+                if site.url != senha.siteiptu or site is None:
+                    if site is not None:
+                        site.fecharsite()
+                    site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
+                    site.abrirnavegador()
+
+                if site is not None and site.navegador != -1:
+                    # Campo de Inscrição da tela Inicial
+                    inscricao = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_inscricao_input')

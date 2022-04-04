@@ -50,8 +50,8 @@ IDYES = 6
 def msgbox(text, style, title):
     """
 
+    :param style: tipo do messagebox.
     :param text: texto da mensagem.
-    :param 'style': tipo do messagebox.
     :param title: título da janela.
     :return:
     """

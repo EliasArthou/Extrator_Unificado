@@ -51,7 +51,7 @@ class App(tk.Tk):
         self.tipoextracao = tk.StringVar()
         self.cmbtipoextracao = ttk.Combobox(self, textvariable=self.tipoextracao)
         self.cmbtipoextracao['state'] = 'readonly'
-        self.cmbtipoextracao['values'] = ['', 'IPTU', 'Bombeiros']
+        self.cmbtipoextracao['values'] = ['', 'IPTU', 'Bombeiros', 'Condomínios']
         self.cmbtipoextracao.place(x=252, y=1, width=self.winfo_width()-252)
         self.cmbtipoextracao.current(0)
         self.cmbtipoextracao.bind('<<ComboboxSelected>>', self.extracao_changed)
