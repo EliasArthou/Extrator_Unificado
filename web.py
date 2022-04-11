@@ -100,9 +100,10 @@ class TratarSite:
 
         return webdriver.Chrome(options=self.options)
 
-    def verificarobjetoexiste(self, identificador, endereco, valorselecao='', itemunico=True, iraoobjeto=False):
+    def verificarobjetoexiste(self, identificador, endereco, valorselecao='', itemunico=True, iraoobjeto=False, sotestar=False):
         """
 
+        :param sotestar: retornar se o objeto existe ou não (retorno se torna um booleano).
         :param iraoobjeto: se simula o mouse em cima do objeto ou não.
         :param identificador: como será identificado, por nome, por nome de classe, etc.
         :param endereco: nome do objeto no site (lembrando que o nome é segundo o parâmetro anterior, se for definido ID no parâmetro anterior,
@@ -142,14 +143,23 @@ class TratarSite:
                     self.trataralerta()
                     time.sleep(1)
 
-                return elemento
+                if not sotestar:
+                    return elemento
+                else:
+                    return True
 
             except NoSuchElementException:
-                return None
+                if not sotestar:
+                    return None
+                else:
+                    return False
 
             except TimeoutException:
                 # messagebox.msgbox('Erro de carregamento objeto!', messagebox.MB_OK, 'Erro Carregamento')
-                return None
+                if not sotestar:
+                    return None
+                else:
+                    return False
 
     def descerrolagem(self):
         """
@@ -237,14 +247,31 @@ class TratarSite:
         if self.navegador is not None:
             return len(self.navegador.window_handles)
 
-    def irparaaba(self, indice):
+    def irparaaba(self, indice=-1, titulo=''):
         """
 
+        :param titulo: título da aba
         :param indice: número absoluto da aba desejada
         :return:
         """
-        if indice <= self.num_abas():
-            self.navegador.switch_to.window(self.navegador.window_handles[indice - 1])
+        achouaba = False
+
+        if indice >= 0 or len(titulo) > 0:
+            if indice >= 0:
+                if indice <= self.num_abas():
+                    self.navegador.switch_to.window(self.navegador.window_handles[indice - 1])
+            else:
+                janelaatual = self.navegador.window_handle
+                handles = self.navegador.window_handles
+                for hdl in handles:
+                    self.navegador.switch_to.window(hdl)
+                    if titulo.upper() in self.navegador.title.upper() + self.navegador.url.upper():
+                        achouaba = True
+                        break
+                if not achouaba:
+                    self.navegador.switch_to.window(janelaatual)
+
+                return achouaba
 
     def fecharaba(self, indice=0):
         if indice == 0:
