@@ -1,10 +1,9 @@
 
-import web
-import sensiveis as info
 import time
 import auxiliares as aux
-import os
-
+import sensiveis as info
+import web
+import re
 
 identificador = 0
 Usuario = 1
@@ -15,7 +14,7 @@ Apartamento = 5
 Resposta = 6
 CheckArquivo = 7
 
-timeout = 3
+timeout = 10
 pastadownload = aux.caminhoprojeto() + '\\' + 'Downloads'
 
 
@@ -23,7 +22,11 @@ def abrj(linha):
     site = None
     try:
         # Quebra o bloco e apartamento da informação
-        linhabloco = linha[Apartamento]+'/'
+        if '/' not in linha[Apartamento]:
+            linhabloco = linha[Apartamento]+'/'
+        else:
+            linhabloco = linha[Apartamento]
+
         apartamentobuscado, blocobuscado = linhabloco.split('/')
 
         # Garante que o apartamento tenha 4 caracteres
@@ -60,8 +63,11 @@ def abrj(linha):
                 email.clear()
                 # Preenche o campo de usuário
                 email.send_keys(linha[Usuario])
+                delay = site.delay
+                site.delay = 2
                 # Campo de senha
                 cmpsenha = site.verificarobjetoexiste('ID', 'senha')
+                site.delay = delay
                 # Se o campo senha não estiver visível ele "clica" no botão entrar para exibir o campo "senha"
                 if cmpsenha is None:
                     # Botão de Salvar
@@ -69,6 +75,7 @@ def abrj(linha):
                     # Verifica se achou o botão Salvar
                     if btnsalvar is not None:
                         site.navegador.execute_script("arguments[0].click()", btnsalvar)
+                    cmpsenha = site.verificarobjetoexiste('ID', 'senha')
 
                 if cmpsenha is not None:
                     if cmpsenha.is_displayed():
@@ -78,8 +85,10 @@ def abrj(linha):
                         # Verifica se achou o botão Salvar
                         if btnsalvar is not None:
                             site.navegador.execute_script("arguments[0].click()", btnsalvar)
+                            site.delay = 2
                             # Verifica se deu erro após apertar no botão para realizar o "LOGIN"
                             msgerro = site.verificarobjetoexiste('ID', 'divMsgErroArea')
+                            site.delay = delay
                             if msgerro is None:
                                 # Operação normal
                                 testalistacondominio = site.verificarobjetoexiste('CSS_SELECTOR', "[class='item-menu lista-condominio']")
@@ -100,16 +109,31 @@ def abrj(linha):
                                             time.sleep(1)
                                             # Clica no condomínio a ser extraído
                                             site.navegador.execute_script("arguments[0].click()", icondominio)
+                                            condominioselecionado = site.verificarobjetoexiste('XPATH', '/html/body/div[3]/div[2]/div/div[1]/div[2]/div/div/div/ul/li[3]/div/b')
+                                            condominioselecionado = condominioselecionado.text
+
+                                            time.sleep(1)
+                                            while condominioselecionado != linha[Condominio].upper():
+                                                condominioselecionado = site.verificarobjetoexiste('XPATH', '/html/body/div[3]/div[2]/div/div[1]/div[2]/div/div/div/ul/li[3]/div/b')
+                                                if condominioselecionado is not None:
+                                                    condominioselecionado = condominioselecionado.text
+                                                else:
+                                                    condominioselecionado = ''
+
                                             # Verifica se tem a mensagem de que não tem boleto disponível
                                             if not site.verificarobjetoexiste('CLASS_NAME', 'conteudo-nenhuma-cobranca', sotestar=True):
                                                 if site.verificarobjetoexiste('CLASS_NAME', 'numero', sotestar=True):
                                                     numapartamentos = site.verificarobjetoexiste('CLASS_NAME', 'numero', itemunico=False)
                                                     dadosapartamentos = site.verificarobjetoexiste('CSS_SELECTOR', "[class='infos col-md-6']", itemunico=False)
                                                     complementoapartamentos = site.verificarobjetoexiste('CLASS_NAME', "complemento", itemunico=False)
-                                                    for numeroap, dadosap, complementoap in zip(numapartamentos, dadosapartamentos, complementoapartamentos):
+                                                    listaapartamentos = zip(numapartamentos, dadosapartamentos, complementoapartamentos)
+                                                    for indice, linhaweb in enumerate(listaapartamentos):
                                                         # Garante que só o exibido(no caso o "a vencer") seja testado
+                                                        numeroap, dadosap, complementoap = linhaweb
+                                                        # Vai para a tela inicial
+                                                        site.irparaaba(titulo='Areadocondomino')
                                                         if numeroap.is_displayed():
-                                                            if numeroap.text == apartamentobuscado and complementoap == blocobuscado:
+                                                            if numeroap.text == apartamentobuscado and complementoap.text == blocobuscado:
                                                                 achouapartamento = True
                                                                 if "Indisponível" not in dadosap.text:
                                                                     site.navegador.execute_script("arguments[0].click()", numeroap)
@@ -118,8 +142,15 @@ def abrj(linha):
                                                                         time.sleep(1)
                                                                     btnsalvar = site.verificarobjetoexiste('ID', 'salvar')
                                                                     site.navegador.execute_script("arguments[0].click()", btnsalvar)
+                                                                    time.sleep(1)
+                                                                    # Vai para a tela inicial
+                                                                    site.irparaaba(titulo='Areadocondomino')
+
                                                                     # Vai para segunda página que ele abre com o boleto resumido
-                                                                    achoupagina = site.navegador.irparaaba(titulo='segundavia')
+                                                                    site.irparaaba(indice=site.num_abas())
+
+                                                                    achoupagina = ('SEGUNDAVIA' in site.navegador.current_url.upper())
+
                                                                     if achoupagina:
                                                                         # Aperta no botão para gerar o boleto
                                                                         btngerarboleto = site.verificarobjetoexiste('CSS_SELECTOR', "[class='botao pagarBoleto pagarBoletoParcelado']")
@@ -140,23 +171,24 @@ def abrj(linha):
 
                                                                             # Define o nome (baseado no nr do boleto)
                                                                             if numboleto == 0:
-                                                                                novonomearquivo = pastadownload + '\\' + linha[identificador] + '_' + linha[Administradora] + '.pdf'
+                                                                                novonomearquivo = pastadownload + '\\' + linha[identificador] + '_' + \
+                                                                                                  info.retornaradministradora('nomereal', linha[Administradora], 'nomereduzido') + '.pdf'
                                                                             else:
-                                                                                novonomearquivo = pastadownload + '\\' + linha[identificador] + '_' + linha[
-                                                                                    Administradora] + '_' + str(numboleto) + '.pdf'
+                                                                                novonomearquivo = pastadownload + '\\' + linha[identificador] + '_' + \
+                                                                                                  info.retornaradministradora('nomereal', linha[Administradora], 'nomereduzido') + '_' \
+                                                                                                  + str(numboleto) + '.pdf'
 
                                                                             # Retorna o último arquivo na pasta de download
                                                                             lastfile = aux.ultimoarquivo(pastadownload, '.pdf')
                                                                             # Verifica se achou um arquivo na pasta de download
                                                                             if len(lastfile) > 0:
+                                                                                # Nâo chamo adicionando o cabeçalho porque o arquivo vem protegido
                                                                                 aux.renomeararquivo(lastfile, novonomearquivo)
                                                                                 numboleto += 1
 
-                                                                            site.navegador.close()
-
-                                                                        achoupagina = site.navegador.irparaaba(titulo='Areadocondominio')
                                                                     else:
                                                                         boletosanalises += 1
+                                                    site.navegador.close()
                                             else:
                                                 # Não existem boletos em aberto para buscar na lista o apartamento dado como entrada
                                                 linha[Resposta] = respostaducessopadrao(-1)
@@ -201,6 +233,8 @@ def bap(linha):
             # Abre o browser
             site.abrirnavegador()
             if site is not None and site.navegador != -1:
+                # Pega o delay configurado no objeto "Site"
+                delay = site.delay
                 # Campo de usuário
                 cmpusuario = site.verificarobjetoexiste('NAME', 'cliente_usuario')
                 # Verifica se achou o campo de usuário
@@ -224,8 +258,12 @@ def bap(linha):
                             # Clica no botão de ‘login’
                             site.navegador.execute_script("arguments[0].click()", botao)
                             time.sleep(1)
+                            # Diminui o tempo de busca pela mensagem de erro
+                            site.delay = 2
                             # Mensagem de erro
                             mensagemerro = site.verificarobjetoexiste('CLASS_NAME', 'bp-formulario-fracasso')
+                            # Retorna o delay ao normal
+                            site.delay = delay
                             # Teste se não tem mensagem de erro do site
                             if mensagemerro is None:
                                 # Acho os links de gerar boleto
@@ -247,7 +285,8 @@ def bap(linha):
                                             if numboleto == 0:
                                                 novonomearquivo = pastadownload + '\\' + linha[identificador] + '_' + linha[Administradora] + '.pdf'
                                             else:
-                                                novonomearquivo = pastadownload + '\\' + linha[identificador] + '_' + linha[Administradora] + '_' + str(numboleto) + '.pdf'
+                                                novonomearquivo = pastadownload + '\\' + linha[identificador] + '_' + linha[Administradora] + '_' \
+                                                                  + str(numboleto) + '.pdf'
 
                                             # Retorna o último arquivo na pasta de download
                                             lastfile = aux.ultimoarquivo(pastadownload, '.pdf')
@@ -270,17 +309,117 @@ def bap(linha):
         linha[Resposta] = str(e)
 
 
+def bcf(linha):
+    site = None
+    try:
+        # Variável que vai retornar a quantidade de boletos
+        numboleto = 0
+        # Prepara o objeto
+        site = web.TratarSite(info.retornaradministradora('nomereal', linha[Administradora], 'site'), info.nomeprofilecond)
+        # Abre o browser
+        site.abrirnavegador()
+        # Verifica se iniciou o site
+        print(info.retornaradministradora('nomereal', linha[Administradora], 'site'), site.url)
+        if site.url != info.retornaradministradora('nomereal', linha[Administradora], 'site') or site is None:
+            # Caso esteja com outra página aberta, fecha
+            if site is not None:
+                site.fecharsite()
+            # Inicia o browser
+            site = web.TratarSite(info.retornaradministradora('nomereal', linha[Administradora], 'site'), info.nomeprofilecond)
+            # Abre o browser
+            site.abrirnavegador()
+        if site is not None and site.navegador != -1:
+            # Pega o delay configurado no objeto "Site"
+            delay = site.delay
+            objetos = site.verificarobjetoexiste('CLASS_NAME', 'text', itemunico=False)
+            for objeto in objetos:
+                match objeto.get_attribute('name'):
+                    # Campo de usuário
+                    case 'login':
+                        objeto.clear()
+                        objeto.send_keys(linha[Usuario])
+                    case 'senha':
+                        objeto.clear()
+                        objeto.send_keys(linha[Senha])
+
+            # Botão de Login
+            botao = site.verificarobjetoexiste('CLASS_NAME', 'submit')
+            # Verifica se achou o botão de ‘login’
+            if botao is not None:
+                # Clica no botão de ‘login’
+                site.navegador.execute_script("arguments[0].click()", botao)
+                time.sleep(1)
+                # Diminui o tempo de busca pela mensagem de erro
+                site.delay = 2
+                # Mensagem de erro (Teste de usuário ou senha inválido)
+                mensagemerro = site.verificarobjetoexiste('ID', 'ucLoginSistema_lbErroEntrar')
+                if mensagemerro is None:
+                    # Segunda tela de erro de login (o site tem duas telas de erro possíveis)
+                    mensagemerro = site.verificarobjetoexiste('ID', 'errorLogin')
+
+                # Teste de erro depois de login validado
+                testetelalinks = site.verificarobjetoexiste('PARTIAL_LINK_TEXT', 'via de boleto')
+                if mensagemerro is None:
+                    mensagemerro = site.verificarobjetoexiste('CLASS_NAME', 'alert')
+
+                # Retorna o delay ao normal
+                site.delay = delay
+                # Teste se não tem mensagem de erro do site
+                if mensagemerro is None or testetelalinks is not None:
+                    numboleto = 0
+                    site.navegador.execute_script("arguments[0].click()", testetelalinks)
+                    time.sleep(1)
+                    if site.verificarobjetoexiste('CLASS_NAME', 'tableRecibos', sotestar=True):
+                        links = site.verificarobjetoexiste('CSS_SELECTOR', "a [title='Baixar PDF']")
+                        if links is not None:
+                            for link in links:
+                                # Clica no link
+                                site.navegador.execute_script("arguments[0].click()", link)
+                                # Espera o download finalizar
+                                site.esperadownloads(pastadownload, timeout)
+                                # Define o nome (baseado no nr do boleto)
+                                if numboleto == 0:
+                                    novonomearquivo = pastadownload + '\\' + linha[identificador] + '_' + linha[Administradora] + '.pdf'
+                                else:
+                                    novonomearquivo = pastadownload + '\\' + linha[identificador] + '_' + linha[Administradora] + '_' \
+                                                      + str(numboleto) + '.pdf'
+
+                                # Retorna o último arquivo na pasta de download
+                                lastfile = aux.ultimoarquivo(pastadownload, '.pdf')
+
+                                # Retorna o último arquivo na pasta de download
+                                lastfile = aux.ultimoarquivo(pastadownload, '.pdf')
+                                # Verifica se achou um arquivo na pasta de download
+                                if len(lastfile) > 0:
+                                    aux.renomeararquivo(lastfile, novonomearquivo, linha[identificador])
+                                    numboleto += 1
+
+                    # Retorna resposta na linha
+                    linha[Resposta] = respostaducessopadrao(numboleto)
+                else:
+                    # Retorna resposta na linha
+                    linha[Resposta] = re.sub('\n+', '\n', mensagemerro.text)
+
+                # Fecha o browser
+                site.fecharsite()
+
+    except Exception as e:
+        if site is not None:
+            site.fecharsite()
+        linha[Resposta] = str(e)
+
+
 def respostaducessopadrao(quant, quantanalise=0):
     if quantanalise == 0 or quant == -1:
         match quant:
             case 0:
                 resposta = 'Sem Boleto'
             case 1:
-                resposta = 'Salvo ' + str(quant) + 'boleto'
+                resposta = 'Salvo ' + str(quant) + ' boleto'
             case -1:
                 resposta = 'Sem boletos em aberto para analisar'
             case _:
-                resposta = 'Salvo ' + str(quant) + 'boletos'
+                resposta = 'Salvo ' + str(quant) + ' boletos'
     else:
         match quant:
             case 0:

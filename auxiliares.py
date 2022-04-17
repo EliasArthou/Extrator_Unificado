@@ -61,15 +61,18 @@ def ultimoarquivo(caminho, extensao):
     return ultimoatualizado
 
 
-def renomeararquivo(nomeantigo, novonome):
+def renomeararquivo(nomeantigo, novonome, codcliente=''):
     """
     : param nomeantigo: nome do arquivo a ser renomeado (endereço completo).
     : param novonome: nome novo do arquivo (endereço completo).
     """
-    if os.path.isfile(to_raw(novonome)):
-        os.remove(to_raw(novonome))
-    time.sleep(0.5)
-    os.rename(to_raw(nomeantigo), to_raw(novonome))
+    if codcliente == '':
+        if os.path.isfile(to_raw(novonome)):
+            os.remove(to_raw(novonome))
+        time.sleep(0.5)
+        os.rename(to_raw(nomeantigo), to_raw(novonome))
+    else:
+        adicionarcabecalhopdf(nomeantigo, novonome, codcliente)
 
 
 def to_raw(string):
@@ -432,6 +435,8 @@ def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho):
     new_pdf = PyPDF2.PdfFileReader(packet)
     # read your existing PDF
     with open(arquivo, 'rb') as p:
+        reader = PyPDF2.PdfFileReader(p)
+        criptografado = reader.isEncrypted
         existing_pdf = (p.readlines())
     arquivopdf = reset_eof_of_pdf_return_stream(existing_pdf)
     arquivoacertado = mid(arquivo, 1, len(arquivo) - 4) + "_acertado" + right(arquivo, 4)

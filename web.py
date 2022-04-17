@@ -261,11 +261,11 @@ class TratarSite:
                 if indice <= self.num_abas():
                     self.navegador.switch_to.window(self.navegador.window_handles[indice - 1])
             else:
-                janelaatual = self.navegador.window_handle
+                janelaatual = self.navegador.current_window_handle
                 handles = self.navegador.window_handles
                 for hdl in handles:
                     self.navegador.switch_to.window(hdl)
-                    if titulo.upper() in self.navegador.title.upper() + self.navegador.url.upper():
+                    if titulo.upper() in self.navegador.title.upper() + self.navegador.current_url.upper():
                         achouaba = True
                         break
                 if not achouaba:
