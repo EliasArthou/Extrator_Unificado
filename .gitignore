@@ -6,7 +6,6 @@
 /dist
 Scai.WMB
 sensiveis.py
-chromedriver.exe
 *.WMB
 *.ldb
 *.xlsx

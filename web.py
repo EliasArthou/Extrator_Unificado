@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 import messagebox
 import sensiveis as senhas
 from subprocess import CREATE_NO_WINDOW
-
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
@@ -30,14 +30,14 @@ class TratarSite:
         self.delay = 10
         self.caminho = ''
 
-    def abrirnavegador(self):
+    def abrirnavegador(self, habilitarpdf=False):
         """
         :return: navegador configurado com o site desejado aberto
         """
         if self.navegador is not None:
             self.fecharsite()
 
-        self.navegador = self.configuraprofilechrome()
+        self.navegador = self.configuraprofilechrome(openpdf=habilitarpdf)
         if self.navegador is not None:
             self.navegador.get(self.url)
             time.sleep(1)
@@ -57,7 +57,7 @@ class TratarSite:
             time.sleep(1)
             return self.navegador
 
-    def configuraprofilechrome(self, ableprintpreview=True):
+    def configuraprofilechrome(self, ableprintpreview=True, openpdf=True):
         """
         Configura usuário e opções no navegador aberto para execução
         return: o navegador configurado para iniciar a execução das rotinas
@@ -77,13 +77,15 @@ class TratarSite:
                     "download.default_directory": aux.caminhoprojeto('Downloads'),  # Change default directory for downloads
                     "download.directory_upgrade": True,
                     "download.prompt_for_download": False,  # To auto download the file
-                    "plugins.always_open_pdf_externally": True  # It will not show PDF directly in chrome
+                    "plugins.always_open_pdf_externally": not openpdf  # It will not show PDF directly in chrome
                 }}
 
         self.options = webdriver.ChromeOptions()
+
         if aux.caminhoprojeto('Profile') != '':
             self.options.add_argument("user-data-dir=" + aux.caminhoprojeto('Profile'))
             self.options.add_argument("--start-maximized")
+            self.options.add_argument("--disable-features=ChromeWhatsNewUI")  # Turn off What's new tab
             self.options.add_experimental_option('prefs', prefs)
             if ableprintpreview:
                 self.options.add_argument('--kiosk-printing')
@@ -95,14 +97,13 @@ class TratarSite:
             # Forma invisível
             # self.options.add_argument("--headless")
 
-        chrome_service = Service('chromedriver.exe')
+        chrome_service = Service(ChromeDriverManager().install())
         chrome_service.creationflags = CREATE_NO_WINDOW
 
         return webdriver.Chrome(options=self.options)
 
     def verificarobjetoexiste(self, identificador, endereco, valorselecao='', itemunico=True, iraoobjeto=False, sotestar=False):
         """
-
         :param sotestar: retornar se o objeto existe ou não (retorno se torna um booleano).
         :param iraoobjeto: se simula o mouse em cima do objeto ou não.
         :param identificador: como será identificado, por nome, por nome de classe, etc.
