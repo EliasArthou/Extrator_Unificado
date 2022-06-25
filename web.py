@@ -423,3 +423,32 @@ class TratarSite:
             tabela = intermediario
 
         return tabela
+
+    def pegaarquivobaixado(self, timeout):
+        self.navegador.execute_script("window.open()")
+        # switch to new tab
+        self.navegador.switch_to.window(self.navegador.window_handles[-1])
+        # navigate to chrome downloads
+        self.navegador.get('chrome://downloads')
+        # define the endTime
+        endTime = time.time() + timeout
+        while True:
+            try:
+                # get downloaded percentage
+                downloadPercentage = self.navegador.execute_script(
+                    "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('#progress').value")
+                # check if downloadPercentage is 100 (otherwise the script will keep waiting)
+                if downloadPercentage == 100:
+                    # return the file name once the download is completed
+                    return self.navegador.execute_script(
+                        "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('div#content  #file-link').text")
+            except:
+                pass
+
+            finally:
+                if self.navegador.current_url == 'chrome://downloads/':
+                    self.fecharaba()
+
+            time.sleep(1)
+            if time.time() > endTime:
+                break

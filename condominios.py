@@ -211,6 +211,8 @@ def abrj(linha):
 
 
 def apsa(linha):
+    # XPATH ícone loading : '/html/body/app-root/app-loading-screen/div/div/div[2]'
+    # Tela de Loading que fica "invisível" (XPATH): '/html/body/app-root/app-loading-screen'
     site = None
     # try:
 
@@ -219,7 +221,7 @@ def apsa(linha):
     # Prepara o objeto
     site = web.TratarSite(info.retornaradministradora('nomereal', linha[Administradora], 'site'), info.nomeprofilecond)
     # Abre o browser
-    site.abrirnavegador(True)
+    site.abrirnavegador(False)
 
     # Verifica se iniciou o site
     if site.url != info.retornaradministradora('nomereal', linha[Administradora], 'site') or site is None:
@@ -288,11 +290,24 @@ def apsa(linha):
 
                             semboletos = site.verificarobjetoexiste('CLASS_NAME', 'ListEmpty_Text')
                             if semboletos is None:
-                                iconesboletos = site.verificarobjetoexiste('PARTIAL_LINK_TEXT', 'Emitir 2ª via')
+                                # lista = site.verificarobjetoexiste('CLASS_NAME', 'Actions_Option_Label', itemunico=False)
+                                iconesboletos = site.verificarobjetoexiste('CLASS_NAME', 'Actions_Option_Label', itemunico=False)
+
+
                                 for boleto in iconesboletos:
-                                    boleto.click()
-                                    # site.navegador.execute_script("arguments[0].click()", boleto)
-                                print('Ok')
+                                    if hasattr(boleto, 'text'):
+                                        if boleto.text == 'Emitir 2ª via':
+                                            site.navegador.execute_script("arguments[0].click()", boleto)
+                                            if site.num_abas() > 1:
+                                                site.irparaaba(2)
+                                                time.sleep(1)
+                                                lembrardepois = site.verificarobjetoexiste('ID', 'ctl00_ContentPlaceHolder1_btnLembrarDepois')
+                                                if lembrardepois is not None:
+                                                    site.navegador.execute_script("arguments[0].click()", lembrardepois)
+                                                    # Espera o download finalizar
+                                                    print(site.pegaarquivobaixado(180))
+                                                    # site.esperadownloads(pastadownload, timeout)
+
                             else:
                                 print(semboletos.text)
 
