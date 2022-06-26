@@ -4,6 +4,7 @@ import auxiliares as aux
 import sensiveis as info
 import web
 import re
+import os
 
 identificador = 0
 Usuario = 1
@@ -304,9 +305,19 @@ def apsa(linha):
                                                 lembrardepois = site.verificarobjetoexiste('ID', 'ctl00_ContentPlaceHolder1_btnLembrarDepois')
                                                 if lembrardepois is not None:
                                                     site.navegador.execute_script("arguments[0].click()", lembrardepois)
-                                                    # Espera o download finalizar
+                                                    # Espera o download finalizar e "pega" o arquivo baixado
                                                     print(site.pegaarquivobaixado(180))
-                                                    # site.esperadownloads(pastadownload, timeout)
+                                                    if numboleto == 0:
+                                                        novonomearquivo = pastadownload + '\\' + linha[
+                                                            identificador] + '_' + linha[Administradora] + '.pdf'
+                                                    else:
+                                                        novonomearquivo = pastadownload + '\\' + linha[
+                                                            identificador] + '_' + linha[Administradora] + '_' \
+                                                                          + str(numboleto) + '.pdf'
+                                                    # Espera o download finalizar e "pega" o arquivo baixado
+                                                    arquivobaixado = site.pegaarquivobaixado(180)
+                                                    if os.path.isfile(pastadownload + '\\' + arquivobaixado):
+                                                        # site.esperadownloads(pastadownload, timeout)
 
                             else:
                                 print(semboletos.text)

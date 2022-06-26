@@ -12,4 +12,5 @@ sensiveis.py
 *.txt
 main.spec
 favicon.ico
+chromedriver.exe
 
