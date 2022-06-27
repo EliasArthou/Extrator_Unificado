@@ -100,7 +100,7 @@ class TratarSite:
         chrome_service = Service(ChromeDriverManager().install())
         chrome_service.creationflags = CREATE_NO_WINDOW
 
-        return webdriver.Chrome(options=self.options)
+        return webdriver.Chrome(options=self.options, service=chrome_service)
 
     def verificarobjetoexiste(self, identificador, endereco, valorselecao='', itemunico=True, iraoobjeto=False, sotestar=False):
         """
@@ -430,6 +430,7 @@ class TratarSite:
         self.navegador.switch_to.window(self.navegador.window_handles[-1])
         # navigate to chrome downloads
         self.navegador.get('chrome://downloads')
+        time.sleep(1)
         # define the endTime
         endTime = time.time() + timeout
         while True:
@@ -446,6 +447,7 @@ class TratarSite:
                 pass
 
             finally:
+                time.sleep(1)
                 if self.navegador.current_url == 'chrome://downloads/':
                     self.fecharaba()
 

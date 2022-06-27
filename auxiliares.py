@@ -6,6 +6,8 @@ import os
 import sys
 import time
 import pypyodbc as pyodbc
+
+
 import sensiveis as senha
 
 
@@ -407,7 +409,7 @@ def mid(s, offset, amount):
     return s[(offset - 1):(offset - 1) + amount]
 
 
-def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho):
+def adicionarcabecalhopdf_old(arquivo, arquivodestino, cabecalho):
     """
     : param arquivo: arquivo PDF de "entrada".
     : param arquivodestino: arquivo PDF de saída (já com o cabeçalho).
@@ -590,3 +592,38 @@ def timezones_disponiveis():
     resposta = requests.get(url)
     timezones = resposta.json()
     return timezones
+
+
+def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho):
+    # read pdf using pdfrw
+
+    from reportlab.pdfgen.canvas import Canvas
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.pdfbase import pdfmetrics
+    from pdfrw import PdfReader
+    from pdfrw.buildxobj import pagexobj
+    from pdfrw.toreportlab import makerl
+
+    reader = PdfReader(arquivo)
+    pages = [pagexobj(p) for p in reader.pages]
+    pdfmetrics.registerFont(TTFont('Arial', 'arial-bold.ttf'))
+    # Compose new pdf
+    canvas = Canvas(arquivodestino)
+    for page_num, page in enumerate(pages, start=1):
+        # Add page with the page size
+        # Here BBox denotes a bounding box
+        canvas.setPageSize((page.BBox[2], page.BBox[3]))
+
+        # make a report lab object
+        canvas.doForm(makerl(canvas, page))
+        # Draw footer
+
+        canvas.saveState()
+        canvas.setFont('Arial', 10)
+        if page_num == 1:
+            canvas.drawString(250, 820, cabecalho)
+        canvas.restoreState()
+        canvas.showPage()
+    canvas.save()
+    if os.path.isfile(arquivo):
+        os.remove(arquivo)
