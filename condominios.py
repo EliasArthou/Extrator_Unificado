@@ -480,6 +480,7 @@ def bap(linha):
                                             if os.path.isfile(pastadownload + '\\' + arquivobaixado):
                                                 aux.renomeararquivo(pastadownload + '\\' + arquivobaixado, novonomearquivo)
                                                 numboleto += 1
+                                                time.sleep(1)
 
                                 # Retorna resposta na linha
                                 linha[Resposta] = respostaducessopadrao(numboleto)
