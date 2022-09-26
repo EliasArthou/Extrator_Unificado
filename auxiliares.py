@@ -594,7 +594,7 @@ def timezones_disponiveis():
     return timezones
 
 
-def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho):
+def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, protegido=False):
     # read pdf using pdfrw
 
     from reportlab.pdfgen.canvas import Canvas
@@ -604,26 +604,29 @@ def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho):
     from pdfrw.buildxobj import pagexobj
     from pdfrw.toreportlab import makerl
 
-    reader = PdfReader(arquivo)
-    pages = [pagexobj(p) for p in reader.pages]
-    pdfmetrics.registerFont(TTFont('Arial', 'arial-bold.ttf'))
-    # Compose new pdf
-    canvas = Canvas(arquivodestino)
-    for page_num, page in enumerate(pages, start=1):
-        # Add page with the page size
-        # Here BBox denotes a bounding box
-        canvas.setPageSize((page.BBox[2], page.BBox[3]))
+    if not protegido:
+        reader = PdfReader(arquivo)
+        pages = [pagexobj(p) for p in reader.pages]
+        pdfmetrics.registerFont(TTFont('Arial', 'arial-bold.ttf'))
+        # Compose new pdf
+        canvas = Canvas(arquivodestino)
+        for page_num, page in enumerate(pages, start=1):
+            # Add page with the page size
+            # Here BBox denotes a bounding box
+            canvas.setPageSize((page.BBox[2], page.BBox[3]))
 
-        # make a report lab object
-        canvas.doForm(makerl(canvas, page))
-        # Draw footer
+            # make a report lab object
+            canvas.doForm(makerl(canvas, page))
+            # Draw footer
 
-        canvas.saveState()
-        canvas.setFont('Arial', 10)
-        if page_num == 1:
-            canvas.drawString(250, 820, cabecalho)
-        canvas.restoreState()
-        canvas.showPage()
-    canvas.save()
-    if os.path.isfile(arquivo):
-        os.remove(arquivo)
+            canvas.saveState()
+            canvas.setFont('Arial', 10)
+            if page_num == 1:
+                canvas.drawString(250, 820, cabecalho)
+            canvas.restoreState()
+            canvas.showPage()
+        canvas.save()
+        if os.path.isfile(arquivo):
+            os.remove(arquivo)
+    else:
+        renomeararquivo(arquivo, arquivodestino)

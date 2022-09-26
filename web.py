@@ -443,8 +443,13 @@ class TratarSite:
                     # return the file name once the download is completed
                     return self.navegador.execute_script(
                         "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('div#content  #file-link').text")
-            except:
-                pass
+            except BaseException as err:
+                arquivo = self.navegador.execute_script(
+                    "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('div#content  #file-link').text")
+                if len(arquivo) > 0:
+                    return arquivo
+                else:
+                    pass
 
             finally:
                 time.sleep(1)
