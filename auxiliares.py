@@ -6,10 +6,11 @@ import os
 import sys
 import time
 import pypyodbc as pyodbc
-
-
+import glob
+import shutil
 import sensiveis as senha
 
+caminho = ''
 
 def caminhoprojeto(subpasta=''):
     """
@@ -52,13 +53,14 @@ def ultimoarquivo(caminho, extensao):
     : param extensao: extensão do arquivo que está sendo buscado o último alterado.
     : return: retorna o caminho completo do último arquivo atualizado da extensão e caminho dado como entrada.
     """
-    lista_arquivos = os.listdir(caminho)
-    ultimadata = 0
-    ultimoatualizado = ''
-    for arquivo in lista_arquivos:
-        if extensao.upper() in arquivo.upper():
-            if os.path.getmtime(caminho + '/' + arquivo) > ultimadata:
-                ultimoatualizado = caminho + '/' + arquivo
+    lista_arquivos = glob.glob(caminho+'/*.'+ extensao)
+    ultimoatualizado = max(lista_arquivos, key = os.path.getmtime)
+    if len(ultimoatualizado) > 0:
+        ultimoatualizado = os.path.abspath(ultimoatualizado)
+    # for arquivo in lista_arquivos:
+    #     if extensao.upper() in arquivo.upper():
+    #         if os.path.getmtime(caminho + '/' + arquivo) > ultimadata:
+    #             ultimoatualizado = caminho + '/' + arquivo
 
     return ultimoatualizado
 
@@ -72,6 +74,7 @@ def renomeararquivo(nomeantigo, novonome, codcliente=''):
         if os.path.isfile(to_raw(novonome)):
             os.remove(to_raw(novonome))
         time.sleep(0.5)
+        mover_arquivo(nomeantigo, novonome)
         os.rename(to_raw(nomeantigo), to_raw(novonome))
     else:
         adicionarcabecalhopdf(nomeantigo, novonome, codcliente)
@@ -104,7 +107,6 @@ class Banco:
 
     def consultar(self, sql):
         """
-
         : param sql: código sql a ser executado (uma consulta SQL).
         : return: o resultado da consulta em uma lista.
         """
@@ -409,7 +411,7 @@ def mid(s, offset, amount):
     return s[(offset - 1):(offset - 1) + amount]
 
 
-def adicionarcabecalhopdf_old(arquivo, arquivodestino, cabecalho):
+def adicionarcabecalhopdf_old(arquivo, arquivodestino, cabecalho, protegido=False):
     """
     : param arquivo: arquivo PDF de "entrada".
     : param arquivodestino: arquivo PDF de saída (já com o cabeçalho).
@@ -452,6 +454,8 @@ def adicionarcabecalhopdf_old(arquivo, arquivodestino, cabecalho):
         os.remove(arquivo)
 
     renomeararquivo(arquivoacertado, arquivo)
+
+
 
     if os.path.isfile(arquivoacertado):
         os.remove(arquivoacertado)
@@ -594,6 +598,44 @@ def timezones_disponiveis():
     return timezones
 
 
+# def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, protegido=False):
+#     # read pdf using pdfrw
+#
+#     from reportlab.pdfgen.canvas import Canvas
+#     from reportlab.pdfbase.ttfonts import TTFont
+#     from reportlab.pdfbase import pdfmetrics
+#     from pdfrw import PdfReader
+#     from pdfrw.buildxobj import pagexobj
+#     from pdfrw.toreportlab import makerl
+#
+#     if not protegido:
+#         reader = PdfReader(arquivo)
+#         pages = [pagexobj(p) for p in reader.pages]
+#         pdfmetrics.registerFont(TTFont('Arial', 'arial-bold.ttf'))
+#         # Compose new pdf
+#         canvas = Canvas(arquivodestino)
+#         for page_num, page in enumerate(pages, start=1):
+#             # Add page with the page size
+#             # Here BBox denotes a bounding box
+#             canvas.setPageSize((page.BBox[2], page.BBox[3]))
+#
+#             # make a report lab object
+#             canvas.doForm(makerl(canvas, page))
+#             # Draw footer
+#
+#             canvas.saveState()
+#             canvas.setFont('Arial', 10)
+#             if page_num == 1:
+#                 canvas.drawString(250, 820, cabecalho)
+#             canvas.restoreState()
+#             canvas.showPage()
+#         canvas.save()
+#         if os.path.isfile(arquivo):
+#             os.remove(arquivo)
+#     else:
+#         mover_arquivo(arquivo, arquivodestino)
+
+
 def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, protegido=False):
     # read pdf using pdfrw
 
@@ -629,4 +671,64 @@ def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, protegido=False):
         if os.path.isfile(arquivo):
             os.remove(arquivo)
     else:
-        renomeararquivo(arquivo, arquivodestino)
+        mover_arquivo(arquivo, arquivodestino)
+
+def encontrar_administradora(administradora):
+    lista = senha.listamultiplas
+    for dicionario in lista:
+        if dicionario['Administradora'] == administradora:
+            return dicionario
+    return None
+
+def salvarcomo(caminhoarquivo, tempoespera):
+    import win32gui
+    import win32con
+    import win32api
+
+    possible_titles = ["Salvar arquivo PDF como", "Salvar Saída de Impressão como"]
+
+    # Loop sobre os títulos possíveis
+    for title in possible_titles:
+        # Encontra a janela de salvar como
+        # dlg = win32gui.FindWindow('#32770', title)
+        dlg = wait_for_window(title, tempoespera)
+
+        if dlg != 0:
+            # Encontra o botão Salvar
+            button = win32gui.FindWindowEx(dlg, 0, "Button", "&Salvar")
+
+            # Encontra a caixa de edição do nome do arquivo
+            edit = win32gui.FindWindowEx(dlg, 0, "Edit", None)
+
+            # Define o nome do arquivo e o envia para a caixa de edição
+            win32gui.SendMessage(edit, win32con.WM_SETTEXT, None, caminhoarquivo)
+
+            # Clica no botão Salvar
+            win32gui.SendMessage(dlg, win32con.WM_COMMAND, 1, button)
+
+            # Espera o processo de salvamento terminar
+            while wait_for_window(title, tempoespera):
+                win32api.Sleep(100)
+
+            return True
+        else:
+            return False
+
+
+
+def wait_for_window (title, max_wait_seconds):
+    import win32gui
+
+    """Espera até que uma janela com o título especificado seja encontrada ou o tempo máximo de espera seja atingido."""
+    start_time = time.time()
+    while True:
+        dlg = win32gui.FindWindow('#32770', title)
+        if dlg != 0:
+            return dlg
+        if time.time() - start_time >= max_wait_seconds:
+            return 0
+        time.sleep(0.1)
+
+def mover_arquivo(origem, destino):
+    shutil.copyfile(origem, destino)
+    os.remove(origem)

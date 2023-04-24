@@ -30,14 +30,14 @@ class TratarSite:
         self.delay = 10
         self.caminho = ''
 
-    def abrirnavegador(self, habilitarpdf=False):
+    def abrirnavegador(self, habilitarpdf=False, caminhodownload=aux.caminhoprojeto('Downloads')):
         """
         :return: navegador configurado com o site desejado aberto
         """
         if self.navegador is not None:
             self.fecharsite()
 
-        self.navegador = self.configuraprofilechrome(openpdf=habilitarpdf)
+        self.navegador = self.configuraprofilechrome(openpdf=habilitarpdf, caminhodownload=caminhodownload)
         if self.navegador is not None:
             self.navegador.get(self.url)
             time.sleep(1)
@@ -57,35 +57,62 @@ class TratarSite:
             time.sleep(1)
             return self.navegador
 
-    def configuraprofilechrome(self, ableprintpreview=True, openpdf=True):
+    def configuraprofilechrome(self, ableprintpreview=True, openpdf=True, caminhodownload = aux.caminhoprojeto('Downloads')):
         """
         Configura usuário e opções no navegador aberto para execução
         return: o navegador configurado para iniciar a execução das rotinas
         """
-        settings = {
-            "recentDestinations": [{
-                "id": "Save as PDF",
-                "origin": "local",
-                "account": "",
-            }], "selectedDestinationId": "Save as PDF",
-            "version": 2
+        # settings = {
+        #     "recentDestinations": [{
+        #         "id": "Save as PDF",
+        #         "origin": "local",
+        #         "account": "",
+        #     }], "selectedDestinationId": "Save as PDF",
+        #     "version": 2
+        # }
+        # prefs = {'printing.print_preview_sticky_settings.appState': json.dumps(settings)}
+        # prefs = {**prefs, **{
+        #         "profile.name": self.perfil,
+        #         "download.default_directory": aux.caminhoprojeto('Downloads'),  # Change default directory for downloads
+        #         "download.directory_upgrade": True,
+        #         "download.prompt_for_download": False,  # To auto download the file
+        #         "plugins.always_open_pdf_externally": not openpdf  # It will not show PDF directly in chrome
+        #     }}
+
+        prefs = {
+            'profile.name': self.perfil,
+            'download.default_directory': caminhodownload,  # Change default directory for downloads
+            'download.directory_upgrade': True,
+            'download.prompt_for_download': False,  # To auto download the file
+            'plugins.always_open_pdf_externally': not openpdf,  # It will not show PDF directly in chrome
+            'printing.print_preview_sticky_settings.appState': json.dumps({
+                'recentDestinations': [{
+                    'id': 'Save as PDF',
+                    'origin': 'local',
+                    'account': '',
+                }],
+                'selectedDestinationId': 'Save as PDF',
+                'version': 2,
+                'defaultDestinationId': 'Save as PDF',
+                'destinationSelection': [{
+                    'id': 'Save as PDF',
+                    'rules': {
+                        'fileExtension': '.pdf',
+                        'isDefault': True,
+                        'saveToFolder': f"{caminhodownload}"
+                    }
+                }]
+            }),
+            'savefile.default_directory': caminhodownload
         }
-        prefs = {'printing.print_preview_sticky_settings.appState': json.dumps(settings)}
-        if aux.caminhoprojeto('Downloads') != '':
-            prefs = {**prefs, **{
-                    "profile.name": self.perfil,
-                    "download.default_directory": aux.caminhoprojeto('Downloads'),  # Change default directory for downloads
-                    "download.directory_upgrade": True,
-                    "download.prompt_for_download": False,  # To auto download the file
-                    "plugins.always_open_pdf_externally": not openpdf  # It will not show PDF directly in chrome
-                }}
 
         self.options = webdriver.ChromeOptions()
 
         if aux.caminhoprojeto('Profile') != '':
-            self.options.add_argument("user-data-dir=" + aux.caminhoprojeto('Profile'))
+            # self.options.add_argument(f"user-data-dir={aux.caminhoprojeto('Downloads')+'\\'}" )
             self.options.add_argument("--start-maximized")
-            self.options.add_argument("--disable-features=ChromeWhatsNewUI")  # Turn off What's new tab
+            self.options.add_argument("--disable-features=ChromeWhatsNewUI")
+            # self.options.add_argument("--print-to-pdf="+aux.caminhoprojeto('Downloads'))
             self.options.add_experimental_option('prefs', prefs)
             if ableprintpreview:
                 self.options.add_argument('--kiosk-printing')
@@ -94,6 +121,7 @@ class TratarSite:
                 self.options.add_argument("--disable-print-preview")
 
             self.options.add_argument("--silent")
+
             # Forma invisível
             # self.options.add_argument("--headless")
 
@@ -281,6 +309,12 @@ class TratarSite:
             self.irparaaba(indice)
             self.navegador.execute_script('window.open("","_self").close()')
 
+    def irparaframe(self, frame):
+        self.navegador.switch_to.frame(frame)
+
+    def sairdoframe(self):
+        self.navegador.switch_to.default_content()
+
     def trataralerta(self):
         from selenium.webdriver.common.alert import Alert
         from selenium.common.exceptions import NoAlertPresentException
@@ -424,7 +458,10 @@ class TratarSite:
 
         return tabela
 
-    def pegaarquivobaixado(self, timeout):
+    def pegaarquivobaixado(self, timeout, quantabas=0):
+        if quantabas > 0:
+            while self.num_abas() > quantabas:
+                time.sleep(1)
         self.navegador.execute_script("window.open()")
         # switch to new tab
         self.navegador.switch_to.window(self.navegador.window_handles[-1])
@@ -443,6 +480,7 @@ class TratarSite:
                     # return the file name once the download is completed
                     return self.navegador.execute_script(
                         "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('div#content  #file-link').text")
+
             except BaseException as err:
                 arquivo = self.navegador.execute_script(
                     "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('div#content  #file-link').text")
