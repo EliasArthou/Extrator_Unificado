@@ -36,6 +36,10 @@ class Banco:
         """
         self.cursor.execute(sql)
         resultado = self.cursor.fetchall()
+        resultado = [
+            list(str(value).strip() if isinstance(value, str) else value for value in row)
+            for row in resultado
+        ]
         return resultado
 
     def adicionardf(self, tabela, df, indicelimpeza=-1):
@@ -78,27 +82,24 @@ def caminhoprojeto(subpasta=''):
     """
     import errno
 
+
     try:
+        caminho = ''
         if getattr(sys, 'frozen', False):
             caminho = os.path.dirname(sys.executable)
         else:
             caminho = os.path.dirname(os.path.abspath(__file__))
 
-        if len(subpasta) > 0:
-            if os.path.isdir(caminho + '\\' + subpasta):
-                return caminho + '\\' + subpasta
-            else:
-                os.mkdir(caminho + '\\' + subpasta)
+        if len(caminho) > 0:
+            if len(subpasta) > 0:
+                if not os.path.isdir(os.path.join(caminho, subpasta)):
+                    os.mkdir(os.path.join(caminho, subpasta))
+                caminho = os.path.join(caminho, subpasta)
 
-            if os.path.isdir(caminho + '\\' + subpasta):
-                return caminho + '\\' + subpasta
-            else:
-                return ''
+        if os.path.isdir(caminho):
+            return caminho
         else:
-            if os.path.isdir(caminho):
-                return caminho
-            else:
-                return ''
+            return ''
 
     except OSError as exc:
         if exc.errno != errno.EEXIST:
@@ -142,71 +143,6 @@ def to_raw(string):
     "string" literal bruta e ignorar caracteres especiais 'dentro' dela como o '\', por exemplo.
     """
     return fr"{string}"
-
-
-class Banco:
-    """
-    Criado para se conectar e realizar operações no banco de dados
-    """
-
-    def __init__(self, caminho):
-        self.conxn = None
-        self.cursor = None
-        self.constr = 'Driver={Microsoft Access Driver (*.mdb, *.accdb)};Dbq=' + caminho + ';Pwd=' + senha.senhabanco
-        self.abrirconexao()
-
-    def abrirconexao(self):
-        if len(self.constr) > 0:
-            self.conxn = pyodbc.connect(self.constr)
-            self.cursor = self.conxn.cursor()
-
-    def consultar(self, sql):
-        """
-        : param sql: código sql a ser executado (uma consulta SQL).
-        : return: o resultado da consulta em uma lista.
-        """
-        self.cursor.execute(sql)
-        resultado = self.cursor.fetchall()
-        resultado = [
-            list(str(value).strip() if isinstance(value, str) else value for value in row)
-            for row in resultado
-        ]
-        return resultado
-
-    def adicionardf(self, tabela, df, indicelimpeza=-1):
-        for linha in df.values:
-            my_list = [str(x) for x in linha]
-            if len(my_list) > 0:
-                if indicelimpeza != -1:
-                    self.abrirconexao()
-                    strSQL = "DELETE * FROM [%s] WHERE Barras = '%s'" % (tabela, my_list[indicelimpeza])
-                    self.cursor.execute(strSQL)
-                    self.conxn.commit()
-
-                strSQL = "INSERT INTO [%s] VALUES " % tabela + " ('" + "', '".join(my_list) + "')"
-                self.cursor.execute(strSQL)
-                self.conxn.commit()
-
-        # df.to_csv('df.csv', sep=';', encoding='utf-8', index=False)
-
-        # RUN QUERY
-        # print(caminhoprojeto())
-        # caminho = caminhoprojeto('Downloads')
-        # strSQL = "INSERT INTO [%s] SELECT * FROM [text;HDR=Yes;FMT=Delimited(;);Database=%s].[df.csv]" % (tabela, caminho)
-
-        # print(strSQL)
-
-        # self.cursor.execute(strSQL)
-        # self.conxn.commit()
-
-        self.conxn.close()  # CLOSE CONNECTION
-        # os.remove('df.csv')
-
-    def fecharbanco(self):
-        """
-        Fecha a conexão com o banco de dados
-        """
-        self.cursor.close()
 
 
 def quantidade_cores(caminho):
@@ -375,7 +311,7 @@ def caminhoselecionado(tipojanela=1, titulojanela='Selecione o caminho/arquivo:'
     : param tipoarquivos: extensão dos arquivos permitidos da seleção.
     : param caminhoini: caminho inicial.
     : param arquivoinicial: arquivo inicial.
-    :return:
+    : return:
     """
     import tkinter as tk
     from tkinter import filedialog
@@ -444,7 +380,7 @@ def left(s, amount):
 
     : param s: "string".
     : param amount: quantidade de caracteres.
-    : return: retorna à esquerda de uma "string"
+    :return: retorna à esquerda de uma "string"
     """
     return s[:amount]
 

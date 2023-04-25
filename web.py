@@ -1,16 +1,14 @@
-import json
-
 from selenium import webdriver
 import io
 from PIL import Image
 import os
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
-# from anticaptchaofficial.imagecaptcha import *
+from anticaptchaofficial.imagecaptcha import *
 import auxiliares as aux
 from bs4 import BeautifulSoup
 import messagebox
-# import sensiveis as senhas
+import sensiveis as senhas
 from subprocess import CREATE_NO_WINDOW
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
@@ -25,22 +23,23 @@ class TratarSite:
     Classe que armazena todas as rotinas de execução de ações no controle remoto de site através do Python
     """
 
-    def __init__(self, url, nomeperfil):
+    def __init__(self, url, nomeperfil, caminhodownload=aux.caminhoprojeto('Downloads')):
         self.url = url
         self.perfil = nomeperfil
         self.navegador = None
         self.options = None
         self.delay = 10
         self.caminho = ''
+        self.caminhodownload = caminhodownload
 
-    def abrirnavegador(self, habilitarpdf=False, caminhodownload=aux.caminhoprojeto('Downloads')):
+    def abrirnavegador(self, habilitarpdf=False):
         """
         :return: navegador configurado com o site desejado aberto
         """
         if self.navegador is not None:
             self.fecharsite()
 
-        self.navegador = self.configuraprofilechrome(openpdf=habilitarpdf, caminhodownload=caminhodownload)
+        self.navegador = self.configuraprofilechrome(openpdf=habilitarpdf)
         if self.navegador is not None:
             self.navegador.get(self.url)
             time.sleep(1)
@@ -54,13 +53,13 @@ class TratarSite:
             if len(resultadolimpo) == 0:
                 messagebox.msgbox(f'Site com problema de carregamento!', messagebox.MB_OK, 'Site fora do ar')
                 self.navegador = -1
-            # ==========================================================================================================================
+            # =========================================================================================================================
             time.sleep(1)
             self.trataralerta()
             time.sleep(1)
             return self.navegador
 
-    def configuraprofilechrome(self, ableprintpreview=True, openpdf=True, caminhodownload=aux.caminhoprojeto('Downloads')):
+    def configuraprofilechrome(self, ableprintpreview=True, openpdf=True):
         """
         Configura usuário e opções no navegador aberto para execução
         return: o navegador configurado para iniciar a execução das rotinas
@@ -68,7 +67,7 @@ class TratarSite:
 
         prefs = {
             'profile.name': self.perfil,
-            'download.default_directory': caminhodownload,  # Change default directory for downloads
+            'download.default_directory': self.caminhodownload,  # Change default directory for downloads
             'download.directory_upgrade': True,
             'download.prompt_for_download': False,  # To auto download the file
             'plugins.always_open_pdf_externally': not openpdf,  # It will not show PDF directly in chrome
@@ -86,11 +85,11 @@ class TratarSite:
                     'rules': {
                         'fileExtension': '.pdf',
                         'isDefault': True,
-                        'saveToFolder': f"{caminhodownload}"
+                        'saveToFolder': f"{self.caminhodownload}"
                     }
                 }]
             }),
-            'savefile.default_directory': caminhodownload
+            'savefile.default_directory': self.caminhodownload
         }
 
         self.options = webdriver.ChromeOptions()
@@ -328,54 +327,54 @@ class TratarSite:
         if self.navegador is not None and hasattr(self.navegador, 'quit'):
             self.navegador.quit()
 
-    # def resolvercaptcha(self, identificacaocaixa, caixacaptcha, identicacaobotao, botao):
-    #     """
-    #     :param identificacaocaixa: opção de como a caixa de texto do captcha será identificada (ID, NAME, CLASS, ETC.)
-    #     :param caixacaptcha: idenficação da caixa do captcha segundo a variável anterior (se for ID, colocar o nome ID, por exemplo)
-    #     :param identicacaobotao: opção de como o botão de ação do captcha será identificado (ID, NAME, CLASS, ETC.)
-    #     :param botao: idenficação do botão de ação do captcha segundo a variável anterior (se for ID, colocar o nome ID, por exemplo)
-    #     :return: booleana dizendo se conseguiu ou não resolver o captcha
-    #     """
-    #     from selenium.common.exceptions import TimeoutException
-    #
-    #     resposta = False
-    #     textoerro = ''
-    #     solver = imagecaptcha()
-    #     solver.set_verbose(1)
-    #     solver.set_key(senhas.chaveanticaptcha)
-    #
-    #     captcha_text = solver.solve_and_return_solution(self.caminho)
-    #
-    #     if len(str(captcha_text)) != 0:
-    #         captcha = self.verificarobjetoexiste(identificacaocaixa, caixacaptcha)
-    #         captcha.send_keys(captcha_text)
-    #         self.verificarobjetoexiste(identicacaobotao, botao, iraoobjeto=True)
-    #
-    #         try:
-    #             mensagemerro = self.retornartabela(3)
-    #             if mensagemerro == 'Código de Segurança inválido. Favor retornar.':
-    #                 solver.report_incorrect_image_captcha()
-    #                 textoerro = mensagemerro
-    #                 resposta = False
-    #             else:
-    #                 textoerro = mensagemerro
-    #                 resposta = True
-    #
-    #             if os.path.isfile(self.caminho):
-    #                 os.remove(self.caminho)
-    #                 self.caminho = ''
-    #
-    #         except TimeoutException:
-    #             resposta = True
-    #             if os.path.isfile(self.caminho):
-    #                 os.remove(self.caminho)
-    #                 self.caminho = ''
-    #
-    #     else:
-    #         print("Erro solução captcha:" + solver.error_code)
-    #         resposta = False
-    #
-    #     return resposta, textoerro
+    def resolvercaptcha(self, identificacaocaixa, caixacaptcha, identicacaobotao, botao):
+        """
+        :param identificacaocaixa: opção de como a caixa de texto do captcha será identificada (ID, NAME, CLASS, ETC.)
+        :param caixacaptcha: idenficação da caixa do captcha segundo a variável anterior (se for ID, colocar o nome ID, por exemplo)
+        :param identicacaobotao: opção de como o botão de ação do captcha será identificado (ID, NAME, CLASS, ETC.)
+        :param botao: idenficação do botão de ação do captcha segundo a variável anterior (se for ID, colocar o nome ID, por exemplo)
+        :return: booleana dizendo se conseguiu ou não resolver o captcha
+        """
+        from selenium.common.exceptions import TimeoutException
+
+        resposta = False
+        textoerro = ''
+        solver = imagecaptcha()
+        solver.set_verbose(1)
+        solver.set_key(senhas.chaveanticaptcha)
+
+        captcha_text = solver.solve_and_return_solution(self.caminho)
+
+        if len(str(captcha_text)) != 0:
+            captcha = self.verificarobjetoexiste(identificacaocaixa, caixacaptcha)
+            captcha.send_keys(captcha_text)
+            self.verificarobjetoexiste(identicacaobotao, botao, iraoobjeto=True)
+
+            try:
+                mensagemerro = self.retornartabela(3)
+                if mensagemerro == 'Código de Segurança inválido. Favor retornar.':
+                    solver.report_incorrect_image_captcha()
+                    textoerro = mensagemerro
+                    resposta = False
+                else:
+                    textoerro = mensagemerro
+                    resposta = True
+
+                if os.path.isfile(self.caminho):
+                    os.remove(self.caminho)
+                    self.caminho = ''
+
+            except TimeoutException:
+                resposta = True
+                if os.path.isfile(self.caminho):
+                    os.remove(self.caminho)
+                    self.caminho = ''
+
+        else:
+            print("Erro solução captcha:" + solver.error_code)
+            resposta = False
+
+        return resposta, textoerro
 
     def retornartabela(self, tipolista):
         import re
