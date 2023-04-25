@@ -205,7 +205,8 @@ class Extrator:
                                         resolveucaptcha, mensagemerro = site.resolvercaptcha('NAME', 'txt_Seguranca', 'XPATH',
                                                                                              '/html/body/table[2]/tbody/tr/td[4]/table[2]/tbody/tr[2]/td[1]/table/tbody/tr/td/table/tbody/tr[2]/td/form/input[5]')
                                         # Testa se teve erro de imóvel não encontrado e começa a busca pelo IPTU
-                                        if 'Imóvel não encontrado. Confira os dados que você informou.' in mensagemerro or 'PREZADO(A) CONTRIBUINTE\nPara verificação dos débitos da Taxa de Incêndios dos imóveis dos municípios de Macaé, São Gonçalo e Campos dos Goytacazes, realize a consulta através do número da inscrição municipal vigente.' in mensagemerro:
+                                        if 'Imóvel não encontrado. Confira os dados que você informou.' in mensagemerro or \
+                                                'PREZADO(A) CONTRIBUINTE\nPara verificação dos débitos da Taxa de Incêndios dos imóveis dos municípios de Macaé, São Gonçalo e Campos dos Goytacazes, realize a consulta através do número da inscrição municipal vigente.' in mensagemerro:
                                             # Limpa a mensagem de erro
                                             mensagemerro = ''
                                             # Se a página ficou aberta ele fecha

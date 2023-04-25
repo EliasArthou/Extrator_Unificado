@@ -12,6 +12,65 @@ import sensiveis as senha
 
 caminho = ''
 
+
+class Banco:
+    """
+    Criado para se conectar e realizar operações no banco de dados
+    """
+
+    def __init__(self, caminho):
+        self.conxn = None
+        self.cursor = None
+        self.constr = 'Driver={Microsoft Access Driver (*.mdb, *.accdb)};Dbq=' + caminho + ';Pwd=' + senha.senhabanco
+        self.abrirconexao()
+
+    def abrirconexao(self):
+        if len(self.constr) > 0:
+            self.conxn = pyodbc.connect(self.constr)
+            self.cursor = self.conxn.cursor()
+
+    def consultar(self, sql):
+        """
+        :param sql: código sql a ser executado (uma consulta SQL).
+        :return: o resultado da consulta em uma lista.
+        """
+        self.cursor.execute(sql)
+        resultado = self.cursor.fetchall()
+        return resultado
+
+    def adicionardf(self, tabela, df, indicelimpeza=-1):
+        for linha in df.values:
+            my_list = [str(x) for x in linha]
+            if len(my_list) > 0:
+                if indicelimpeza != -1:
+                    self.abrirconexao()
+                    strSQL = "DELETE * FROM [%s] WHERE Barras = %s" % (tabela, my_list[indicelimpeza])
+                    self.cursor.execute(strSQL)
+                    self.conxn.commit()
+
+                strSQL = "INSERT INTO [" + tabela + "] VALUES (%s)" % ', '.join(my_list)
+                print(strSQL)
+                self.cursor.execute(strSQL)
+                self.conxn.commit()
+
+        # df.to_csv('df.csv', sep=';', encoding='utf-8', index=False)
+
+        # RUN QUERY
+        # strSQL = "INSERT INTO [%s] SELECT * FROM [text;HDR=Yes;FMT=Delimited(;);Database=D:\Projetos\Extrair Imposto].[df.csv]" % tabela
+
+        # self.cursor.execute(strSQL)
+        # self.conxn.commit()
+
+        self.conxn.close()  # CLOSE CONNECTION
+        # os.remove('df.csv')
+
+    def fecharbanco(self):
+        """
+        Fecha a conexão com o banco de dados
+        """
+        self.cursor.close()
+
+
 def caminhoprojeto(subpasta=''):
     """
     : param subpasta: adiciona o caminho da subpasta dada como entrada (caso preenchido).
@@ -53,14 +112,10 @@ def ultimoarquivo(caminho, extensao):
     : param extensao: extensão do arquivo que está sendo buscado o último alterado.
     : return: retorna o caminho completo do último arquivo atualizado da extensão e caminho dado como entrada.
     """
-    lista_arquivos = glob.glob(caminho+'/*.'+ extensao)
-    ultimoatualizado = max(lista_arquivos, key = os.path.getmtime)
+    lista_arquivos = glob.glob(caminho + '/*.' + extensao)
+    ultimoatualizado = max(lista_arquivos, key=os.path.getmtime)
     if len(ultimoatualizado) > 0:
         ultimoatualizado = os.path.abspath(ultimoatualizado)
-    # for arquivo in lista_arquivos:
-    #     if extensao.upper() in arquivo.upper():
-    #         if os.path.getmtime(caminho + '/' + arquivo) > ultimadata:
-    #             ultimoatualizado = caminho + '/' + arquivo
 
     return ultimoatualizado
 
@@ -112,6 +167,10 @@ class Banco:
         """
         self.cursor.execute(sql)
         resultado = self.cursor.fetchall()
+        resultado = [
+            list(str(value).strip() if isinstance(value, str) else value for value in row)
+            for row in resultado
+        ]
         return resultado
 
     def adicionardf(self, tabela, df, indicelimpeza=-1):
@@ -455,8 +514,6 @@ def adicionarcabecalhopdf_old(arquivo, arquivodestino, cabecalho, protegido=Fals
 
     renomeararquivo(arquivoacertado, arquivo)
 
-
-
     if os.path.isfile(arquivoacertado):
         os.remove(arquivoacertado)
 
@@ -673,12 +730,14 @@ def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, protegido=False):
     else:
         mover_arquivo(arquivo, arquivodestino)
 
+
 def encontrar_administradora(administradora):
     lista = senha.listamultiplas
     for dicionario in lista:
         if dicionario['Administradora'] == administradora:
             return dicionario
     return None
+
 
 def salvarcomo(caminhoarquivo, tempoespera):
     import win32gui
@@ -715,8 +774,7 @@ def salvarcomo(caminhoarquivo, tempoespera):
             return False
 
 
-
-def wait_for_window (title, max_wait_seconds):
+def wait_for_window(title, max_wait_seconds):
     import win32gui
 
     """Espera até que uma janela com o título especificado seja encontrada ou o tempo máximo de espera seja atingido."""
@@ -729,6 +787,44 @@ def wait_for_window (title, max_wait_seconds):
             return 0
         time.sleep(0.1)
 
+
 def mover_arquivo(origem, destino):
     shutil.copyfile(origem, destino)
     os.remove(origem)
+
+
+def retornastrinflistaadm(campo):
+    nomes_administradoras = [admin[campo] for admin in senha.listaadministradora]
+    string_nomes_administradoras = ', '.join(["'{}'".format(item) for item in nomes_administradoras])
+    return string_nomes_administradoras
+
+
+def retornarlistaboletos(listaadministradora=None):
+    if listaadministradora is not None:
+        string_nomes_administradoras = ', '.join(["'{}'".format(item) for item in listaadministradora])
+        sql = (senha.sqlcondominios + ' WHERE NomeAdm in (%s)' % string_nomes_administradoras)
+    else:
+        sql = (senha.sqlcondominios + ' WHERE NomeAdm in (%s)' % retornastrinflistaadm('nomereal'))
+
+    return sql
+
+
+def enviarSMS(mensagem):
+    from twilio.rest import Client
+
+    try:
+        client = Client(senha.account_sid, senha.auth_token)
+        message = client.messages.create(
+            to=senha.my_number,
+            from_=senha.twilio_number,
+            body=mensagem
+        )
+
+        print(message.sid)
+
+        return True
+
+    except Exception as e:
+        print(str(e))
+
+        return False
