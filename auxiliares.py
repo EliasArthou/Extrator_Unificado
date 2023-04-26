@@ -82,7 +82,6 @@ def caminhoprojeto(subpasta=''):
     """
     import errno
 
-
     try:
         caminho = ''
         if getattr(sys, 'frozen', False):

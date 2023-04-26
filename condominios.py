@@ -1210,22 +1210,20 @@ def livefacilities(linha):
                                 if erroboleto is None:
                                     # Pega todos os botões de gerar boleto do frame
                                     objetosboletos = site.verificarobjetoexiste('XPATH', '//a[contains(@title,"Abrir Boleto")]', itemunico=False)
-                                    for i, boleto in enumerate(objetosboletos, start=1):
+                                    totalboletos = len(objetosboletos)
+                                    for i in range(totalboletos):
                                         # Clica no botão de boleto
-                                        boleto.click()
+                                        objetosboletos[i].click()
+                                        time.sleep(1)
                                         frame = site.verificarobjetoexiste('CLASS_NAME', 'iziModal-iframe')
-                                        botaofechar = site.verificarobjetoexiste('XPATH', "//button[@class='iziModal-button iziModal-close']")
 
                                         if frame is not None:
-                                            site.irparaframe(frame)
-
                                             # Botão Imprimir
                                             botaoimprimir = site.verificarobjetoexiste('ID', 'print')
                                             if botaoimprimir is not None:
                                                 time.sleep(5)
                                                 # Aperta o botão de impressão
                                                 botaoimprimir.click()
-
                                                 # Define que o nome do arquivo ficará
                                                 if i == 1:
                                                     novonomearquivo = os.path.join(aux.caminho, aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora], 'nomereduzido') + '.pdf')
@@ -1236,27 +1234,24 @@ def livefacilities(linha):
                                                 arquivobaixado = aux.ultimoarquivo(pastadownload, 'pdf')
 
                                                 # Verifica se o arquivo baixado de fato existe
-                                                if os.path.isfile(pastadownload + '\\' + arquivobaixado):
+                                                if os.path.isfile(arquivobaixado):
                                                     # Move o arquivo para o caminho escolhido
-                                                    aux.adicionarcabecalhopdf(pastadownload + '\\' + arquivobaixado, novonomearquivo, aux.left(linha[identificador], 4))
+                                                    aux.adicionarcabecalhopdf(arquivobaixado, novonomearquivo, aux.left(linha[identificador], 4))
                                                     # Verifica se o arquivo foi gerado
                                                     if os.path.isfile(novonomearquivo):
                                                         numboleto += 1
-                                                    time.sleep(1)
 
-                                                frame = site.verificarobjetoexiste('CLASS_NAME', 'iziModal-iframe')
-                                                botaofechar = site.verificarobjetoexiste('XPATH', "//button[@class='iziModal-button iziModal-close']")
+                                        site.navegador.refresh()
+                                        time.sleep(2)
+                                        objetosboletos = site.verificarobjetoexiste('XPATH', '//a[contains(@title,"Abrir Boleto")]', itemunico=False)
 
-                                                site.irparaframe(frame)
-                                                botaofechar.click()
 
-                                                site.sairdoframe()
 
                                     # Retorna resposta na linha
                                     linha[Resposta] = respostapadrao(numboleto)
                                 else:
                                     # Retorna a tela de erro
-                                    linha[Resposta] = erroboleto.text
+                                    linha[Resposta] = respostapadrao(numboleto)
                     else:
                         # Retorna a tela de erro
                         linha[Resposta] = erro.text
