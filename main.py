@@ -1,4 +1,4 @@
-"""
+
 from janela import App
 
 app = App()
@@ -35,7 +35,7 @@ tabela = []
 
 if len(aux.caminho) > 0 and len(caminhobanco) > 0:
     bd = aux.Banco(caminhobanco)
-    tabela = bd.consultar(aux.retornarlistaboletos(['HFLEX', 'VÓRTEX']))
+    tabela = bd.consultar(aux.retornarlistaboletos(['ADMINISTRADORA REALCAD']))
 
     for item in tabela:
         if len(item[condominios.Usuario].strip()) > 0 and len(item[condominios.Senha].strip()) > 0:
@@ -46,6 +46,7 @@ if len(aux.caminho) > 0 and len(caminhobanco) > 0:
                 getattr(condominios, multiplas['Site'])(item)
         else:
             item[condominios.Resposta] = 'Usuário e/ou senha não preenchido!'
+            item[condominios.ProblemaLogin] = True
         print('Resposta: ' + item[condominios.Resposta])
 else:
     if len(aux.caminho) > 0:
@@ -56,3 +57,4 @@ else:
 
 # except Exception as e:
 #     print(f"Error:{str(e)}")
+"""

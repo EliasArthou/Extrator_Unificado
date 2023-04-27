@@ -444,7 +444,7 @@ class TratarSite:
 
         return tabela
 
-    def pegaarquivobaixado(self, timeout, quantabas=0):
+    def pegaarquivobaixado(self, timeout, quantabas=0, caminhobaixado=''):
         if quantabas > 0:
             while self.num_abas() > quantabas:
                 time.sleep(1)
@@ -468,12 +468,22 @@ class TratarSite:
                         "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('div#content  #file-link').text")
 
             except BaseException as err:
-                arquivo = self.navegador.execute_script(
-                    "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('div#content  #file-link').text")
-                if len(arquivo) > 0:
-                    return arquivo
-                else:
-                    pass
+                try:
+                    arquivo = self.navegador.execute_script(
+                        "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('div#content  #file-link').text")
+                    if len(arquivo) > 0:
+                        return arquivo
+                    else:
+                        pass
+
+                except Exception as e:
+                    # Obtendo o caminho da pasta de downloads padrão do Chrome
+                    if len(caminhobaixado) > 0:
+                        # Espera o download finalizar
+                        self.esperadownloads(caminhobaixado, timeout)
+                        # Pega o último arquivo baixado da pasta
+                        arquivo = aux.ultimoarquivo(caminhobaixado, 'pdf')
+                        return os.path.basename(arquivo)
 
             finally:
                 time.sleep(1)

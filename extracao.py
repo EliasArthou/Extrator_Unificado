@@ -10,6 +10,8 @@ import sensiveis as senha
 import time
 import messagebox as msg
 import sys
+import condominios
+import iptu
 
 
 class Extrator:
@@ -24,15 +26,19 @@ class Extrator:
         self.tempofim = ''
         self.codigocliente = ''
         self.sql = ''
+        self.indicecliente = ''
         self.resultado = []
         self.opcoesextracao = -1
         self.resposta = -1
+        self.pastadownload = aux.caminhoprojeto() + '\\' + 'Downloads'
+        self.listachaves = []
+        self.listadados = []
 
     def controlaextracao(self):
         try:
             self.visual.acertaconfjanela(False)
 
-            if os.path.isfile(aux.caminhoprojeto() + '/' + 'Scai.WMB'):
+            if os.path.isfile(os.path.join(aux.caminhoprojeto(), 'Scai.WMB')):
                 caminhobanco = aux.caminhoselecionado(titulojanela='Selecione o arquivo de banco de dados:',
                                                       tipoarquivos=[('Banco ' + senha.empresa, '*.WMB'), ('Todos os Arquivos:', '*.*')],
                                                       caminhoini=aux.caminhoprojeto(), arquivoinicial='Scai.WMB')
@@ -51,10 +57,10 @@ class Extrator:
                 sys.exit()
 
             self.resposta = str(self.visual.tipopagamento.get())
-            indicecliente = aux.criarinputbox('Cliente de Corte', 'Iniciar a partir de um cliente? (0 fará de todos da lista)', valorinicial='0')
+            self.indicecliente = aux.criarinputbox('Cliente de Corte', 'Iniciar a partir de um cliente? (0 fará de todos da lista)', valorinicial='0')
 
-            if indicecliente is not None:
-                if not str(indicecliente).isdigit():
+            if self.indicecliente is not None:
+                if not str(self.indicecliente).isdigit():
                     msg.msgbox('Digite um valor válido (precisa ser numérico)!', msg.MB_OK, 'Opção Inválida')
                     self.visual.manipularradio(self.extracao, True)
                     sys.exit()
@@ -76,15 +82,19 @@ class Extrator:
                 case 'IPTU':
                     self.sql = senha.sqliptucompleto
 
+                case 'Condomínios':
+                    self.sql = aux.retornarlistaboletos
+
                 case _:
                     msg.msgbox(f'Opção Inválida!', msg.MB_OK, 'Opção não reconhecida!')
 
             self.bd = aux.Banco(caminhobanco)
-            indicecliente = str(indicecliente).zfill(4)
-            if indicecliente == '0000':
-                self.resultado = self.bd.consultar(self.sql)
-            else:
-                self.resultado = self.bd.consultar(self.sql.replace(';', ' ') + "WHERE Codigo >= '{codigo}'".format(codigo=indicecliente))
+            if len(self.indicecliente) > 0:
+                self.indicecliente = str(self.indicecliente).zfill(4)
+                if self.indicecliente == '0000':
+                    self.resultado = self.bd.consultar(self.sql)
+                else:
+                    self.resultado = self.bd.consultar(self.sql.replace(';', ' ') + "WHERE Codigo >= '{codigo}'".format(codigo=self.indicecliente))
 
             self.bd.fecharbanco()
 
@@ -95,6 +105,9 @@ class Extrator:
                 case 'IPTU':
                     self.extrairboletosiptu()
 
+                case 'Condomínios':
+                    self.extraircondominio()
+
                 case _:
                     msg.msgbox(f'Extração não configurada!', msg.MB_OK, 'Extração não reconhecida!')
 
@@ -103,14 +116,6 @@ class Extrator:
             if self.site is not None:
                 # Fecha o browser
                 self.site.fecharsite()
-
-            # Verifica se tem itens para salvar no Excel
-            if len(self.listaexcel) > 0:
-                # Atualiza o "status" na tela de usuário
-                self.visual.mudartexto('labelstatus', 'Salvando lista...')
-                # Escreve no arquivo a lista e salva o Excel
-                nomearquivo = 'Log_' + aux.acertardataatual() + '.xlsx'
-                aux.escreverlistaexcelog(nomearquivo, self.listaexcel)
 
             self.tempofim = time.time()
 
@@ -132,10 +137,9 @@ class Extrator:
         try:
             gerarboleto = not self.visual.somentevalores.get()
 
-            pastadownload = aux.caminhoprojeto() + '\\' + 'Downloads'
-            listachaves = ['Cod Cliente', 'Nº CBMERJ', 'Área Construída', 'Utilização', 'Faixa', 'Proprietário', 'Endereço',
-                           'taxa[anos_em_debito]', 'taxa[Exercicio]', 'taxa[Parcela]', 'taxa[Vencimento]', 'taxa[Valor]',
-                           'taxa[Mora]', 'taxa[Total]', 'Status']
+            self.listachaves = ['Cod Cliente', 'Nº CBMERJ', 'Área Construída', 'Utilização', 'Faixa', 'Proprietário', 'Endereço',
+                                'taxa[anos_em_debito]', 'taxa[Exercicio]', 'taxa[Parcela]', 'taxa[Vencimento]', 'taxa[Valor]',
+                                'taxa[Mora]', 'taxa[Total]', 'Status']
             self.listaexcel = []
             site = web.TratarSite(senha.siteCBM, senha.nomeprofileCBM)
 
@@ -324,7 +328,7 @@ class Extrator:
                                                                             # Espera o download
                                                                             site.esperadownloads(pastadownloadinicial, 10)
                                                                             # Verifica o último arquivo baixado
-                                                                            baixado = aux.ultimoarquivo(pastadownloadinicial, '.pdf')
+                                                                            baixado = aux.ultimoarquivo(pastadownloadinicial, 'pdf')
                                                                             # Verifica se o arquivo baixado vem do site
                                                                             if 'modules' not in baixado and 'Taxa de Incêndio' not in baixado:
                                                                                 # Caso não seja do site ele "limpa" a informação do último arquivo da pasta
@@ -335,10 +339,10 @@ class Extrator:
                                                                             if len(baixado) > 0:
                                                                                 # Define o nome do arquivo (adicionando o índice de ano quando necessário)
                                                                                 if indiceano == 0:
-                                                                                    caminhodestino = pastadownload + '/' + listaanos[indicebotao - 1] + '_' + codigocliente + '_' + \
+                                                                                    caminhodestino = self.pastadownload + '/' + listaanos[indicebotao - 1] + '_' + codigocliente + '_' + \
                                                                                                      linha['cbm'] + '.pdf'
                                                                                 else:
-                                                                                    caminhodestino = pastadownload + '/' + listaanos[indicebotao - 1] + '_' + codigocliente + '_' + \
+                                                                                    caminhodestino = self.pastadownload + '/' + listaanos[indicebotao - 1] + '_' + codigocliente + '_' + \
                                                                                                      linha['cbm'] + '_' + str(indiceano) + '.pdf'
 
                                                                                 # Trata o caminho para ignorar caracteres especiais no endereço
@@ -369,8 +373,8 @@ class Extrator:
                                                 dadoscbm = [codigocliente, aux.left(str(linha['cbm']), 7) + '-' + aux.right(str(linha['cbm']), 1), '', '', '', '', '', '', '', '', '',
                                                             '', '', '', mensagemerro]
                                                 # Adiciona o item com o cabeçalho
-                                                if len(dadoscbm) == len(listachaves):
-                                                    self.listaexcel.append(dict(zip(listachaves, dadoscbm)))
+                                                if len(dadoscbm) == len(self.listachaves):
+                                                    self.listaexcel.append(dict(zip(self.listachaves, dadoscbm)))
                                                 else:
                                                     print(mensagemerro)
                                             # Fecha o site
@@ -410,10 +414,9 @@ class Extrator:
         gerarboleto = not self.visual.somentevalores.get()
         salvardadospdf = self.visual.codigosdebarra.get()
 
-        self.visual.acertaconfjanela(False)
+        # self.visual.acertaconfjanela(False)
 
-        pastadownload = aux.caminhoprojeto() + '\\' + 'Downloads'
-        listachaves = ['Código Cliente', 'Inscrição', 'Guia do Exercício', 'Nr Guia', 'Valor', 'Contribuinte', 'Endereço', 'Status']
+        self.listachaves = ['Código Cliente', 'Inscrição', 'Guia do Exercício', 'Nr Guia', 'Valor', 'Contribuinte', 'Endereço', 'Status']
         self.listaexcel = []
         site = web.TratarSite(senha.siteiptu, 'ExtrairBoletoIPTU')
 
@@ -432,7 +435,7 @@ class Extrator:
             self.visual.configurarbarra('barraextracao', len(self.resultado), indice + 1)
             time.sleep(0.1)
             # ===================================== Parte Gráfica =======================================================
-            caminhodestino = pastadownload + '/' + codigocliente + '_' + linha['iptu'] + '.pdf'
+            caminhodestino = self.pastadownload + '/' + codigocliente + '_' + linha['iptu'] + '.pdf'
             if not os.path.isfile(caminhodestino) or not gerarboleto:
                 if site is not None:
                     site.fecharsite()
@@ -496,7 +499,7 @@ class Extrator:
                                                     namevalor = 'ctl00$ePortalContent$cbCotaUnica'
                                                     valores = site.verificarobjetoexiste('NAME', namevalor)
                                                     dadosiptu = [codigocliente, linha['iptu'], guiaexercicio, 1, valores.text, contribuinte, endereco]
-                                                    self.listaexcel.append(dict(zip(listachaves, dadosiptu)))
+                                                    self.listaexcel.append(dict(zip(self.listachaves, dadosiptu)))
 
                                                 case '2' | '3' | '4':
                                                     idselecionado = 'ctl00_ePortalContent_Chk_00' + str(int(self.resposta) - 1)
@@ -511,7 +514,7 @@ class Extrator:
                                                     for index, valor in enumerate(valores):
                                                         dadosiptu = [codigocliente, linha['iptu'], guiaexercicio, str(index + 1), valor.text,
                                                                      contribuinte, endereco]
-                                                        self.listaexcel.append(dict(zip(listachaves, dadosiptu)))
+                                                        self.listaexcel.append(dict(zip(self.listachaves, dadosiptu)))
 
                                                 case _:
                                                     idselecionado = ''
@@ -533,8 +536,8 @@ class Extrator:
                                                                                                       iraoobjeto=True)
                                                                 if imprimir is not None:
                                                                     self.visual.mudartexto('labelstatus', 'Salvando Boleto...')
-                                                                    site.esperadownloads(pastadownload, 10)
-                                                                    baixado = aux.ultimoarquivo(pastadownload, '.pdf')
+                                                                    site.esperadownloads(self.pastadownload, 10)
+                                                                    baixado = aux.ultimoarquivo(self.pastadownload, 'pdf')
                                                                     if 'DARM_' not in baixado:
                                                                         baixado = ''
                                                                     if len(baixado) > 0:
@@ -558,9 +561,8 @@ class Extrator:
                                                                             self.bd.adicionardf('Codigos IPTUs', df, 8)
                                                                         # aux.renomeararquivo(baixado, pastadownload + '/' + codigocliente + '_' + linha['iptu'] + '.pdf')
 
-                                            if os.path.isfile(pastadownload + '/' + codigocliente + '_' + linha['iptu'] + '.pdf'):
+                                            if os.path.isfile(self.pastadownload + '/' + codigocliente + '_' + linha['iptu'] + '.pdf'):
                                                 for dicionario in self.listaexcel:
-
                                                     if dicionario['Código Cliente'] == codigocliente and dicionario['Inscrição'] == linha['iptu']:
                                                         dicionario.update({'Status': 'Ok'})
                                             else:
@@ -603,13 +605,13 @@ class Extrator:
                                             dadosiptu = [codigocliente, linha['iptu'], guiaexercicio, '0', valorimpostotela.text, contribuinte, endereco,
                                                          'Verificar (Extrair Manualmente)']
 
-                                        self.listaexcel.append(dict(zip(listachaves, dadosiptu)))
+                                        self.listaexcel.append(dict(zip(self.listachaves, dadosiptu)))
                                         if site is not None:
                                             site.fecharsite()
 
                                 else:
                                     dadosiptu = [codigocliente, linha['iptu'], '', '', '', '', '', mensagemerro.text]
-                                    self.listaexcel.append(dict(zip(listachaves, dadosiptu)))
+                                    self.listaexcel.append(dict(zip(self.listachaves, dadosiptu)))
                                     site.fecharsite()
             else:
                 if os.path.isfile(caminhodestino) and salvardadospdf:
@@ -632,38 +634,49 @@ class Extrator:
     def extraircondominio(self):
         self.visual.acertaconfjanela(False)
 
-        pastadownload = aux.caminhoprojeto() + '\\' + 'Downloads'
-        listachaves = ['Código', 'Login', 'Senha', 'Administradora', 'Condomínio', 'Unidade', 'Resposta', 'Check de Arquivo']
+        self.listachaves = ['Código', 'Login', 'Senha', 'Administradora', 'Condomínio', 'Unidade', 'Resposta', 'Check de Arquivo', 'CheckErro', 'Nome Função', 'Problema Login']
         self.listaexcel = []
-        site = web.TratarSite(senha.siteiptu, 'ExtrairBoletoCond')
 
         for indice, linha in enumerate(self.resultado):
             codigocliente = linha['codigo']
             # ===================================== Parte Gráfica =======================================================
             self.visual.mudartexto('labelcodigocliente', 'Código Cliente: ' + codigocliente)
-            iptu = str(linha['iptu'])
-            iptu = str(iptu.strip()).zfill(8)
-            iptu = '{}.{}{}{}.{}{}{}-{}'.format(*iptu)
-            self.visual.mudartexto('labelinscricao', 'Inscrição Imobiliária: ' + iptu)
-
+            self.visual.mudartexto('labelinscricao', '')
             self.visual.mudartexto('labelquantidade', 'Item ' + str(indice + 1) + ' de ' + str(len(self.resultado)) + '...')
             self.visual.mudartexto('labelstatus', 'Extraindo boleto...')
             # Atualiza a barra de progresso das transações (Views)
             self.visual.configurarbarra('barraextracao', len(self.resultado), indice + 1)
             time.sleep(0.1)
             # ===================================== Parte Gráfica =======================================================
-            caminhodestino = pastadownload + '/' + codigocliente + '_' + linha['iptu'] + '.pdf'
-            if not os.path.isfile(caminhodestino):
-                if site is not None:
-                    site.fecharsite()
-                site = web.TratarSite(senha.siteiptu, 'ExtrairBoletoCond')
-                site.abrirnavegador()
-                if site.url != senha.siteiptu or site is None:
-                    if site is not None:
-                        site.fecharsite()
-                    site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
-                    site.abrirnavegador()
+            if len(linha[condominios.Usuario].strip()) > 0 and len(linha[condominios.Senha].strip()) > 0:
+                multiplas = aux.encontrar_administradora(linha[condominios.Administradora])
+                if multiplas is None:
+                    getattr(condominios, senha.retornaradministradora('nomereal', linha[condominios.Administradora], 'nomereduzido').lower())(self, linha)
+                else:
+                    getattr(condominios, multiplas['Site'])(self, linha)
+            else:
+                linha[condominios.Resposta] = 'Usuário e/ou senha não preenchido!'
+                linha[condominios.ProblemaLogin] = True
+                if len(linha[condominios.Resposta]) == 0:
+                    linha[condominios.Resposta] = condominios.mensagemerropadrao
+                self.visual.mudartexto('labelstatus', linha[condominios.Resposta])
 
-                if site is not None and site.navegador != -1:
-                    # Campo de Inscrição da tela Inicial
-                    inscricao = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_inscricao_input')
+    def criarlistadicionarios(self):
+        # Verifica se tem dados e cabeçalhos nas respectivas linhas e se as mesmas tem a mesma quantidade de colunas
+        if len(self.listachaves) > 0 and len(self.listadados) > 0 and all(len(sublist) == len(self.listachaves) for sublist in self.listadados):
+            lista_de_dicionarios = []
+            for valores_correspondentes in self.listadados:
+                novo_dicionario = {chave: valor for chave, valor in zip(self.listachaves, valores_correspondentes)}
+                lista_de_dicionarios.append(novo_dicionario)
+            return lista_de_dicionarios
+        else:
+            return None
+
+    def criarlog(self):
+        self.listaexcel = self.criarlistadicionarios()
+        if len(self.listaexcel) > 0:
+            # Atualiza o "status" na tela de usuário
+            self.visual.mudartexto('labelstatus', 'Salvando lista...')
+            # Escreve no arquivo a lista e salva o Excel
+            nomearquivo = 'Log_' + aux.acertardataatual() + '.xlsx'
+            aux.escreverlistaexcelog(nomearquivo, self.listaexcel)

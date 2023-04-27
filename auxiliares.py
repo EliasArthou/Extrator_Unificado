@@ -130,7 +130,7 @@ def renomeararquivo(nomeantigo, novonome, codcliente=''):
             os.remove(to_raw(novonome))
         time.sleep(0.5)
         mover_arquivo(nomeantigo, novonome)
-        os.rename(to_raw(nomeantigo), to_raw(novonome))
+        # os.rename(to_raw(nomeantigo), to_raw(novonome))
     else:
         adicionarcabecalhopdf(nomeantigo, novonome, codcliente)
 
@@ -590,44 +590,6 @@ def timezones_disponiveis():
     return timezones
 
 
-# def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, protegido=False):
-#     # read pdf using pdfrw
-#
-#     from reportlab.pdfgen.canvas import Canvas
-#     from reportlab.pdfbase.ttfonts import TTFont
-#     from reportlab.pdfbase import pdfmetrics
-#     from pdfrw import PdfReader
-#     from pdfrw.buildxobj import pagexobj
-#     from pdfrw.toreportlab import makerl
-#
-#     if not protegido:
-#         reader = PdfReader(arquivo)
-#         pages = [pagexobj(p) for p in reader.pages]
-#         pdfmetrics.registerFont(TTFont('Arial', 'arial-bold.ttf'))
-#         # Compose new pdf
-#         canvas = Canvas(arquivodestino)
-#         for page_num, page in enumerate(pages, start=1):
-#             # Add page with the page size
-#             # Here BBox denotes a bounding box
-#             canvas.setPageSize((page.BBox[2], page.BBox[3]))
-#
-#             # make a report lab object
-#             canvas.doForm(makerl(canvas, page))
-#             # Draw footer
-#
-#             canvas.saveState()
-#             canvas.setFont('Arial', 10)
-#             if page_num == 1:
-#                 canvas.drawString(250, 820, cabecalho)
-#             canvas.restoreState()
-#             canvas.showPage()
-#         canvas.save()
-#         if os.path.isfile(arquivo):
-#             os.remove(arquivo)
-#     else:
-#         mover_arquivo(arquivo, arquivodestino)
-
-
 def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, protegido=False):
     # read pdf using pdfrw
 
@@ -666,10 +628,10 @@ def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, protegido=False):
         mover_arquivo(arquivo, arquivodestino)
 
 
-def encontrar_administradora(administradora):
+def encontrar_administradora(administradora, campo='Administradora'):
     lista = senha.listamultiplas
     for dicionario in lista:
-        if dicionario['Administradora'] == administradora:
+        if dicionario[campo] == administradora:
             return dicionario
     return None
 

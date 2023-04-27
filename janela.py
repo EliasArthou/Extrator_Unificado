@@ -120,8 +120,6 @@ class App(tk.Tk):
         else:
             if self.executar is not None:
                 self.executar.state(["disabled"])
-            # if self.c1 is not None:
-            #    self.c1.destroy()
 
         match tipoextracao:
             case 'Bombeiros':
@@ -165,8 +163,8 @@ class App(tk.Tk):
                     self.data1.destroy()
                     self.data2.destroy()
                     self.data3.destroy()
-                    # self.c1.destroy()
-                    # self.c2.destroy()
+                    self.c1.destroy()
+                    self.c2.destroy()
 
             case _:
                 if self.labelradio is not None:
@@ -183,10 +181,10 @@ class App(tk.Tk):
                     self.cotaunica.destroy()
                 if self.cotaparcelada is not None:
                     self.cotaparcelada.destroy()
-                # if self.c1 is not None:
-                #     self.c1.destroy()
-                # if self.c2 is not None:
-                #     self.c2.destroy()
+                if self.c1 is not None:
+                    self.c1.destroy()
+                if self.c2 is not None:
+                    self.c2.destroy()
 
         self.atualizatela()
 
