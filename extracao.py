@@ -11,7 +11,7 @@ import time
 import messagebox as msg
 import sys
 import condominios
-import iptu
+import Biptu
 
 
 class Extrator:
@@ -56,18 +56,22 @@ class Extrator:
                 self.visual.manipularradio(self.extracao, True)
                 sys.exit()
 
-            self.resposta = str(self.visual.tipopagamento.get())
-            self.indicecliente = aux.criarinputbox('Cliente de Corte', 'Iniciar a partir de um cliente? (0 fará de todos da lista)', valorinicial='0')
+            if not bool(self.visual.somentevalores.get()):
+                self.pastadownload = aux.caminhoselecionado(3, 'Selecione o caminho dos arquivos:', caminhoini=self.pastadownload)
 
-            if self.indicecliente is not None:
-                if not str(self.indicecliente).isdigit():
-                    msg.msgbox('Digite um valor válido (precisa ser numérico)!', msg.MB_OK, 'Opção Inválida')
+            self.resposta = str(self.visual.tipopagamento.get())
+            if self.visual.tipoextracao != 'Condomínios':
+                self.indicecliente = aux.criarinputbox('Cliente de Corte', 'Iniciar a partir de um cliente? (0 fará de todos da lista)', valorinicial='0')
+
+                if self.indicecliente is not None:
+                    if not str(self.indicecliente).isdigit():
+                        msg.msgbox('Digite um valor válido (precisa ser numérico)!', msg.MB_OK, 'Opção Inválida')
+                        self.visual.manipularradio(self.extracao, True)
+                        sys.exit()
+                else:
+                    msg.msgbox('Digite o inicío desejado ou deixe 0 (Zero)!', msg.MB_OK, 'Opção Inválida!')
                     self.visual.manipularradio(self.extracao, True)
                     sys.exit()
-            else:
-                msg.msgbox('Digite o inicío desejado ou deixe 0 (Zero)!', msg.MB_OK, 'Opção Inválida!')
-                self.visual.manipularradio(self.extracao, True)
-                sys.exit()
 
             self.tempoinicio = time.time()
 
@@ -79,8 +83,11 @@ class Extrator:
                 case 'Bombeiros':
                     self.sql = senha.sqlcbm
 
-                case 'IPTU':
-                    self.sql = senha.sqliptucompleto
+                case 'Prefeitura':
+                    if bool(self.visual.faltantes):
+                        self.sql = senha.sqliptufaltante
+                    else:
+                        self.sql = senha.sqliptucompleto
 
                 case 'Condomínios':
                     self.sql = aux.retornarlistaboletos
@@ -89,12 +96,12 @@ class Extrator:
                     msg.msgbox(f'Opção Inválida!', msg.MB_OK, 'Opção não reconhecida!')
 
             self.bd = aux.Banco(caminhobanco)
-            if len(self.indicecliente) > 0:
+            if len(str(self.indicecliente)) > 0:
                 self.indicecliente = str(self.indicecliente).zfill(4)
                 if self.indicecliente == '0000':
                     self.resultado = self.bd.consultar(self.sql)
                 else:
-                    self.resultado = self.bd.consultar(self.sql.replace(';', ' ') + "WHERE Codigo >= '{codigo}'".format(codigo=self.indicecliente))
+                    self.resultado = self.bd.consultar(self.sql.replace(';', ' ') + "WHERE Codigo >= '{codigo}' ORDER BY Codigo;".format(codigo=self.indicecliente))
 
             self.bd.fecharbanco()
 
@@ -102,8 +109,14 @@ class Extrator:
                 case 'Bombeiros':
                     self.extrairboletosbombeiro()
 
-                case 'IPTU':
-                    self.extrairboletosiptu()
+                case 'Prefeitura':
+                    match self.visual.tiposervico:
+                        case 'IPTU':
+                            self.extrairboletosiptu()
+                        case 'Nada Consta':
+                            self.extrairboletosiptu()
+                        case 'Certidão Negativa':
+                            self.extrairboletosiptu()
 
                 case 'Condomínios':
                     self.extraircondominio()
@@ -411,8 +424,8 @@ class Extrator:
         """
 
         # try:
-        gerarboleto = not self.visual.somentevalores.get()
-        salvardadospdf = self.visual.codigosdebarra.get()
+        # gerarboleto = not self.visual.somentevalores.get()
+        # salvardadospdf = self.visual.codigosdebarra.get()
 
         # self.visual.acertaconfjanela(False)
 
@@ -421,10 +434,11 @@ class Extrator:
         site = web.TratarSite(senha.siteiptu, 'ExtrairBoletoIPTU')
 
         for indice, linha in enumerate(self.resultado):
-            codigocliente = linha['codigo']
+
+            codigocliente = linha[Biptu.Codigo]
             # ===================================== Parte Gráfica =======================================================
             self.visual.mudartexto('labelcodigocliente', 'Código Cliente: ' + codigocliente)
-            iptu = str(linha['iptu'])
+            iptu = str(linha[Biptu.NrIPTU])
             iptu = str(iptu.strip()).zfill(8)
             iptu = '{}.{}{}{}.{}{}{}-{}'.format(*iptu)
             self.visual.mudartexto('labelinscricao', 'Inscrição Imobiliária: ' + iptu)
@@ -433,203 +447,205 @@ class Extrator:
             self.visual.mudartexto('labelstatus', 'Extraindo boleto...')
             # Atualiza a barra de progresso das transações (Views)
             self.visual.configurarbarra('barraextracao', len(self.resultado), indice + 1)
-            time.sleep(0.1)
+            # time.sleep(0.1)
             # ===================================== Parte Gráfica =======================================================
-            caminhodestino = self.pastadownload + '/' + codigocliente + '_' + linha['iptu'] + '.pdf'
-            if not os.path.isfile(caminhodestino) or not gerarboleto:
-                if site is not None:
-                    site.fecharsite()
-                site = web.TratarSite(senha.siteiptu, 'ExtrairBoletoIPTU')
-                site.abrirnavegador()
-                if site.url != senha.siteiptu or site is None:
-                    if site is not None:
-                        site.fecharsite()
-                    site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
-                    site.abrirnavegador()
-
-                if site is not None and site.navegador != -1:
-                    # Campo de Inscrição da tela Inicial
-                    inscricao = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_inscricao_input')
-                    if inscricao is not None:
-                        inscricao.clear()
-                        inscricao.send_keys(linha['iptu'])
-                        if site.url == senha.siteiptu:
-                            botaogerar = site.verificarobjetoexiste('NAME', 'ctl00$ePortalContent$DefiniGuia')
-                            if botaogerar is not None:
-                                if getattr(sys, 'frozen', False):
-                                    botaogerar.click()
-                                else:
-                                    site.navegador.execute_script("arguments[0].click()", botaogerar)
-
-                                mensagemerro = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_MSG')
-                                if mensagemerro is None:
-                                    site.delay = 2
-                                    mensagemguia = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_M1')
-                                    site.delay = 10
-                                    if mensagemguia is None:
-                                        guia = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_Guia1')
-                                        if guia is not None:
-                                            if getattr(sys, 'frozen', False):
-                                                guia.click()
-                                            else:
-                                                site.navegador.execute_script("arguments[0].click()", guia)
-                                            guiaexercicio = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_GuiaExercicio')
-                                            if guiaexercicio is None:
-                                                guiaexercicio = ''
-                                            else:
-                                                guiaexercicio = guiaexercicio.text
-
-                                            contribuinte = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_CONTRIBUINTE')
-                                            if contribuinte is None:
-                                                contribuinte = ''
-                                            else:
-                                                contribuinte = contribuinte.text
-
-                                            endereco = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_ENDERECO')
-                                            if endereco is None:
-                                                endereco = ''
-                                            else:
-                                                endereco = endereco.text
-
-                                            botaogerarid = 'ctl00_ePortalContent_btnDarmIndiv'
-
-                                            match self.resposta:
-                                                case '1':
-                                                    idselecionado = 'ctl00_ePortalContent_cbCotaUnica'
-                                                    namevalor = 'ctl00$ePortalContent$cbCotaUnica'
-                                                    valores = site.verificarobjetoexiste('NAME', namevalor)
-                                                    dadosiptu = [codigocliente, linha['iptu'], guiaexercicio, 1, valores.text, contribuinte, endereco]
-                                                    self.listaexcel.append(dict(zip(self.listachaves, dadosiptu)))
-
-                                                case '2' | '3' | '4':
-                                                    idselecionado = 'ctl00_ePortalContent_Chk_00' + str(int(self.resposta) - 1)
-                                                    if self.resposta == '2':
-                                                        namevalor = 'Valor_Prim'
-                                                    elif self.resposta == '3':
-                                                        namevalor = 'Valor_Segu'
-                                                    else:
-                                                        namevalor = 'Valor_Terc'
-
-                                                    valores = site.verificarobjetoexiste('NAME', namevalor, itemunico=False)
-                                                    for index, valor in enumerate(valores):
-                                                        dadosiptu = [codigocliente, linha['iptu'], guiaexercicio, str(index + 1), valor.text,
-                                                                     contribuinte, endereco]
-                                                        self.listaexcel.append(dict(zip(self.listachaves, dadosiptu)))
-
-                                                case _:
-                                                    idselecionado = ''
-
-                                            if gerarboleto:
-                                                cota = site.verificarobjetoexiste('ID', idselecionado, iraoobjeto=True)
-                                                if cota is not None:
-                                                    botaogerar = site.verificarobjetoexiste('ID', botaogerarid, iraoobjeto=True)
-                                                    if botaogerar is not None:
-                                                        confirmar = site.verificarobjetoexiste('ID', 'popup_ok')
-                                                        if confirmar is not None:
-                                                            if getattr(sys, 'frozen', False):
-                                                                confirmar.click()
-                                                            else:
-                                                                site.navegador.execute_script("arguments[0].click()", confirmar)
-
-                                                            if site.navegador.current_url == senha.telaboletoIPTU:
-                                                                imprimir = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_ImprimirDARM',
-                                                                                                      iraoobjeto=True)
-                                                                if imprimir is not None:
-                                                                    self.visual.mudartexto('labelstatus', 'Salvando Boleto...')
-                                                                    site.esperadownloads(self.pastadownload, 10)
-                                                                    baixado = aux.ultimoarquivo(self.pastadownload, 'pdf')
-                                                                    if 'DARM_' not in baixado:
-                                                                        baixado = ''
-                                                                    if len(baixado) > 0:
-                                                                        caminhodestino = aux.to_raw(caminhodestino)
-                                                                        aux.adicionarcabecalhopdf(baixado, caminhodestino, codigocliente)
-                                                                        if salvardadospdf:
-                                                                            listacodigo = []
-                                                                            listatipopag = []
-                                                                            listaarquivo = []
-                                                                            df = aux.extrairtextopdf(caminhodestino)
-                                                                            total_rows = df[df.columns[0]].count()
-                                                                            for linhadf in range(total_rows):
-                                                                                listacodigo.append(codigocliente)
-                                                                                listatipopag.append('PARCELADO')
-                                                                                listaarquivo.append(caminhodestino)
-
-                                                                            df.insert(loc=0, column='Codigo', value=listacodigo)
-                                                                            df.insert(loc=4, column='TpoPagto', value=listatipopag)
-                                                                            df.insert(loc=5, column='Arquivo', value=listaarquivo)
-
-                                                                            self.bd.adicionardf('Codigos IPTUs', df, 8)
-                                                                        # aux.renomeararquivo(baixado, pastadownload + '/' + codigocliente + '_' + linha['iptu'] + '.pdf')
-
-                                            if os.path.isfile(self.pastadownload + '/' + codigocliente + '_' + linha['iptu'] + '.pdf'):
-                                                for dicionario in self.listaexcel:
-                                                    if dicionario['Código Cliente'] == codigocliente and dicionario['Inscrição'] == linha['iptu']:
-                                                        dicionario.update({'Status': 'Ok'})
-                                            else:
-                                                for dicionario in self.listaexcel:
-                                                    if dicionario['Código Cliente'] == codigocliente and dicionario['Inscrição'] == linha['iptu']:
-                                                        dicionario.update({'Status': 'Verificar'})
-
-                                            if site is not None:
-                                                site.fecharsite()
-                                    else:
-                                        valorimpostotela = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_Valor1')
-                                        if valorimpostotela is not None:
-                                            valor = valorimpostotela.text
-                                            valor = valor.replace('.', '')
-                                            valor = valor.replace(',', '.')
-                                        else:
-                                            valor = 0
-
-                                        guiaexercicio = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_Guia1')
-                                        if guiaexercicio is None:
-                                            guiaexercicio = ''
-                                        else:
-                                            guiaexercicio = guiaexercicio.text
-
-                                        contribuinte = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_CONTRIBUINTE')
-                                        if contribuinte is None:
-                                            contribuinte = ''
-                                        else:
-                                            contribuinte = contribuinte.text
-
-                                        endereco = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_ENDERECO')
-                                        if endereco is None:
-                                            endereco = ''
-                                        else:
-                                            endereco = endereco.text
-
-                                        if valorimpostotela is None or float(valor) == 0:
-                                            dadosiptu = [codigocliente, linha['iptu'], guiaexercicio, '0', '0,00', contribuinte, endereco, 'Sem Guia (Provável Isento)']
-                                        else:
-                                            dadosiptu = [codigocliente, linha['iptu'], guiaexercicio, '0', valorimpostotela.text, contribuinte, endereco,
-                                                         'Verificar (Extrair Manualmente)']
-
-                                        self.listaexcel.append(dict(zip(self.listachaves, dadosiptu)))
-                                        if site is not None:
-                                            site.fecharsite()
-
-                                else:
-                                    dadosiptu = [codigocliente, linha['iptu'], '', '', '', '', '', mensagemerro.text]
-                                    self.listaexcel.append(dict(zip(self.listachaves, dadosiptu)))
-                                    site.fecharsite()
-            else:
-                if os.path.isfile(caminhodestino) and salvardadospdf:
-                    listacodigo = []
-                    listatipopag = []
-                    listaarquivo = []
-                    df = aux.extrairtextopdf(caminhodestino)
-                    total_rows = df[df.columns[0]].count()
-                    for linhadf in range(total_rows):
-                        listacodigo.append(codigocliente)
-                        listatipopag.append('PARCELADO')
-                        listaarquivo.append(caminhodestino)
-
-                    df.insert(loc=0, column='Codigo', value=listacodigo)
-                    df.insert(loc=4, column='TpoPagto', value=listatipopag)
-                    df.insert(loc=5, column='Arquivo', value=listaarquivo)
-
-                    self.bd.adicionardf('Codigos IPTUs', df, 7)
+            caminhodestino = self.pastadownload + '/' + codigocliente + '_' + linha[Biptu.NrIPTU] + '.pdf'
+            # if not os.path.isfile(caminhodestino) or not gerarboleto:
+            #     if site is not None:
+            #         site.fecharsite()
+            #     site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
+            #     site.abrirnavegador()
+            #     if site.url != senha.siteiptu or site is None:
+            #         if site is not None:
+            #             site.fecharsite()
+            #         site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
+            #         site.abrirnavegador()
+            #
+            #     if site is not None and site.navegador != -1:
+            #         # Campo de Inscrição da tela Inicial
+            #         inscricao = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_inscricao_input')
+            #         if inscricao is not None:
+            #             inscricao.clear()
+            #             inscricao.send_keys(linha['iptu'])
+            #             if site.url == senha.siteiptu:
+            #                 botaogerar = site.verificarobjetoexiste('NAME', 'ctl00$ePortalContent$DefiniGuia')
+            #                 if botaogerar is not None:
+            #                     if getattr(sys, 'frozen', False):
+            #                         botaogerar.click()
+            #                     else:
+            #                         site.navegador.execute_script("arguments[0].click()", botaogerar)
+            #
+            #                     mensagemerro = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_MSG')
+            #                     if mensagemerro is None:
+            #                         site.delay = 2
+            #                         mensagemguia = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_M1')
+            #                         site.delay = 10
+            #                         if mensagemguia is None:
+            #                             guia = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_Guia1')
+            #                             if guia is not None:
+            #                                 if getattr(sys, 'frozen', False):
+            #                                     guia.click()
+            #                                 else:
+            #                                     site.navegador.execute_script("arguments[0].click()", guia)
+            #                                 guiaexercicio = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_GuiaExercicio')
+            #                                 if guiaexercicio is None:
+            #                                     guiaexercicio = ''
+            #                                 else:
+            #                                     guiaexercicio = guiaexercicio.text
+            #
+            #                                 contribuinte = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_CONTRIBUINTE')
+            #                                 if contribuinte is None:
+            #                                     contribuinte = ''
+            #                                 else:
+            #                                     contribuinte = contribuinte.text
+            #
+            #                                 endereco = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_ENDERECO')
+            #                                 if endereco is None:
+            #                                     endereco = ''
+            #                                 else:
+            #                                     endereco = endereco.text
+            #
+            #                                 botaogerarid = 'ctl00_ePortalContent_btnDarmIndiv'
+            #
+            #                                 match self.resposta:
+            #                                     case '1':
+            #                                         idselecionado = 'ctl00_ePortalContent_cbCotaUnica'
+            #                                         namevalor = 'ctl00$ePortalContent$cbCotaUnica'
+            #                                         valores = site.verificarobjetoexiste('NAME', namevalor)
+            #                                         dadosiptu = [codigocliente, linha['iptu'], guiaexercicio, 1, valores.text, contribuinte, endereco]
+            #                                         self.listaexcel.append(dict(zip(self.listachaves, dadosiptu)))
+            #
+            #                                     case '2' | '3' | '4':
+            #                                         idselecionado = 'ctl00_ePortalContent_Chk_00' + str(int(self.resposta) - 1)
+            #                                         if self.resposta == '2':
+            #                                             namevalor = 'Valor_Prim'
+            #                                         elif self.resposta == '3':
+            #                                             namevalor = 'Valor_Segu'
+            #                                         else:
+            #                                             namevalor = 'Valor_Terc'
+            #
+            #                                         valores = site.verificarobjetoexiste('NAME', namevalor, itemunico=False)
+            #                                         for index, valor in enumerate(valores):
+            #                                             dadosiptu = [codigocliente, linha['iptu'], guiaexercicio, str(index + 1), valor.text,
+            #                                                          contribuinte, endereco]
+            #                                             self.listaexcel.append(dict(zip(self.listachaves, dadosiptu)))
+            #
+            #                                     case _:
+            #                                         idselecionado = ''
+            #
+            #                                 if gerarboleto:
+            #                                     cota = site.verificarobjetoexiste('ID', idselecionado, iraoobjeto=True)
+            #                                     if cota is not None:
+            #                                         botaogerar = site.verificarobjetoexiste('ID', botaogerarid, iraoobjeto=True)
+            #                                         if botaogerar is not None:
+            #                                             confirmar = site.verificarobjetoexiste('ID', 'popup_ok')
+            #                                             if confirmar is not None:
+            #                                                 if getattr(sys, 'frozen', False):
+            #                                                     confirmar.click()
+            #                                                 else:
+            #                                                     site.navegador.execute_script("arguments[0].click()", confirmar)
+            #
+            #                                                 if site.navegador.current_url == senha.telaboletoIPTU:
+            #                                                     imprimir = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_ImprimirDARM',
+            #                                                                                           iraoobjeto=True)
+            #                                                     if imprimir is not None:
+            #                                                         self.visual.mudartexto('labelstatus', 'Salvando Boleto...')
+            #                                                         site.esperadownloads(self.pastadownload, 10)
+            #                                                         baixado = aux.ultimoarquivo(self.pastadownload, 'pdf')
+            #                                                         if 'DARM_' not in baixado:
+            #                                                             baixado = ''
+            #                                                         if len(baixado) > 0:
+            #                                                             caminhodestino = aux.to_raw(caminhodestino)
+            #                                                             aux.adicionarcabecalhopdf(baixado, caminhodestino, codigocliente)
+            #                                                             if salvardadospdf:
+            #                                                                 listacodigo = []
+            #                                                                 listatipopag = []
+            #                                                                 listaarquivo = []
+            #                                                                 df = aux.extrairtextopdf(caminhodestino)
+            #                                                                 total_rows = df[df.columns[0]].count()
+            #                                                                 for linhadf in range(total_rows):
+            #                                                                     listacodigo.append(codigocliente)
+            #                                                                     listatipopag.append('PARCELADO')
+            #                                                                     listaarquivo.append(caminhodestino)
+            #
+            #                                                                 df.insert(loc=0, column='Codigo', value=listacodigo)
+            #                                                                 df.insert(loc=4, column='TpoPagto', value=listatipopag)
+            #                                                                 df.insert(loc=5, column='Arquivo', value=listaarquivo)
+            #
+            #                                                                 self.bd.adicionardf('Codigos IPTUs', df, 8)
+            #                                                             # aux.renomeararquivo(baixado, pastadownload + '/' + codigocliente + '_' + linha['iptu'] + '.pdf')
+            #
+            #                                 if os.path.isfile(self.pastadownload + '/' + codigocliente + '_' + linha['iptu'] + '.pdf'):
+            #                                     for dicionario in self.listaexcel:
+            #                                         if dicionario['Código Cliente'] == codigocliente and dicionario['Inscrição'] == linha['iptu']:
+            #                                             dicionario.update({'Status': 'Ok'})
+            #                                 else:
+            #                                     for dicionario in self.listaexcel:
+            #                                         if dicionario['Código Cliente'] == codigocliente and dicionario['Inscrição'] == linha['iptu']:
+            #                                             dicionario.update({'Status': 'Verificar'})
+            #
+            #                                 if site is not None:
+            #                                     site.fecharsite()
+            #                         else:
+            #                             valorimpostotela = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_Valor1')
+            #                             if valorimpostotela is not None:
+            #                                 valor = valorimpostotela.text
+            #                                 valor = valor.replace('.', '')
+            #                                 valor = valor.replace(',', '.')
+            #                             else:
+            #                                 valor = 0
+            #
+            #                             guiaexercicio = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_Guia1')
+            #                             if guiaexercicio is None:
+            #                                 guiaexercicio = ''
+            #                             else:
+            #                                 guiaexercicio = guiaexercicio.text
+            #
+            #                             contribuinte = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_CONTRIBUINTE')
+            #                             if contribuinte is None:
+            #                                 contribuinte = ''
+            #                             else:
+            #                                 contribuinte = contribuinte.text
+            #
+            #                             endereco = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_ENDERECO')
+            #                             if endereco is None:
+            #                                 endereco = ''
+            #                             else:
+            #                                 endereco = endereco.text
+            #
+            #                             if valorimpostotela is None or float(valor) == 0:
+            #                                 dadosiptu = [codigocliente, linha['iptu'], guiaexercicio, '0', '0,00', contribuinte, endereco, 'Sem Guia (Provável Isento)']
+            #                             else:
+            #                                 dadosiptu = [codigocliente, linha['iptu'], guiaexercicio, '0', valorimpostotela.text, contribuinte, endereco,
+            #                                              'Verificar (Extrair Manualmente)']
+            #
+            #                             self.listaexcel.append(dict(zip(self.listachaves, dadosiptu)))
+            #                             if site is not None:
+            #                                 site.fecharsite()
+            #
+            #                     else:
+            #                         dadosiptu = [codigocliente, linha['iptu'], '', '', '', '', '', mensagemerro.text]
+            #                         self.listaexcel.append(dict(zip(self.listachaves, dadosiptu)))
+            #                         site.fecharsite()
+            # else:
+            #     if os.path.isfile(caminhodestino) and salvardadospdf:
+            #         listacodigo = []
+            #         listatipopag = []
+            #         listaarquivo = []
+            #         df = aux.extrairtextopdf(caminhodestino)
+            #         total_rows = df[df.columns[0]].count()
+            #         for linhadf in range(total_rows):
+            #             listacodigo.append(codigocliente)
+            #             listatipopag.append('PARCELADO')
+            #             listaarquivo.append(caminhodestino)
+            #
+            #         df.insert(loc=0, column='Codigo', value=listacodigo)
+            #         df.insert(loc=4, column='TpoPagto', value=listatipopag)
+            #         df.insert(loc=5, column='Arquivo', value=listaarquivo)
+            #
+            #         self.bd.adicionardf('Codigos IPTUs', df, 7)
+            dadosiptu = Biptu.extrairboletos(self, linha)
+            print(dadosiptu)
 
     def extraircondominio(self):
         self.visual.acertaconfjanela(False)

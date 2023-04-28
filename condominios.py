@@ -361,7 +361,8 @@ def apsa(objeto, linha):
                                                                 if numboleto == 0:
                                                                     novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '_' + linha[Administradora] + '.pdf'
                                                                 else:
-                                                                    novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '_' + linha[Administradora] + '_' + str(numboleto + 1) + '.pdf'
+                                                                    novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '_' + linha[Administradora] + '_' + str(
+                                                                        numboleto + 1) + '.pdf'
 
                                                                 # Espera o download finalizar e "pega" o arquivo baixado
                                                                 arquivobaixado = site.pegaarquivobaixado(tempoesperadownload)
@@ -920,7 +921,6 @@ def ICondo(objeto, linha):
                     if selecionaritem is not None:
                         selecionaritem.click()
 
-
             # Clica no botão de ‘login’
             site.navegador.execute_script("arguments[0].click()", botao)
             # time.sleep(1)
@@ -1124,8 +1124,8 @@ def Webware(objeto, linha):
                                     if os.path.isfile(objeto.pastadownload + '\\' + arquivobaixado):
                                         # Move o arquivo para o caminho escolhido
                                         if info.retornaradministradora('nomereal', linha[Administradora], 'nomereduzido') == "LOWNDES":
-                                            aux.adicionarcabecalhopdf(objeto.pastadownload + '\\' + arquivobaixado, novonomearquivo, aux.left(linha[identificador], 4), protegido=True)
-                                        else:
+                                            #     aux.adicionarcabecalhopdf(objeto.pastadownload + '\\' + arquivobaixado, novonomearquivo, aux.left(linha[identificador], 4), protegido=True)
+                                            # else:
                                             aux.adicionarcabecalhopdf(objeto.pastadownload + '\\' + arquivobaixado, novonomearquivo, aux.left(linha[identificador], 4))
                                         # Verifica se o arquivo foi gerado
                                         if os.path.isfile(novonomearquivo):
@@ -1721,8 +1721,8 @@ def nacional(objeto, linha):
                                     # Vai para os frames do boleto
                                     site.irparaframe(frameboletos)
 
-# SEM BOLETOS, NÃO TEM COMO TESTAR DAQUI PRA BAIXO
-# ==============================================================================================================================================================
+                                    # SEM BOLETOS, NÃO TEM COMO TESTAR DAQUI PRA BAIXO
+                                    # ==============================================================================================================================================================
                                     boletos = site.verificarobjetoexiste('PARTIAL_LINK_TEXT', 'Clique aqui para gerar a 2ª via', itemunico=False)
 
                                     if boletos is not None:
@@ -1736,7 +1736,8 @@ def nacional(objeto, linha):
                                                                                                                                                                   'nomereduzido') + '.pdf')
                                             else:
                                                 novonomearquivo = os.path.join(aux.caminho, aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                                                  'nomereduzido') + '_' + str(i) + '.pdf')
+                                                                                                                                                                  'nomereduzido') + '_' + str(
+                                                    i) + '.pdf')
                                             time.sleep(2)
 
                                             # Espera o download finalizar e "pega" o arquivo baixado (Espera o download pela página download do chrome)

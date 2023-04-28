@@ -17,7 +17,10 @@ class App(tk.Tk):
         super().__init__()
 
         # Largura da Janela
+
         self.labelradio = None
+        self.cmbtiposervico = None
+        self.labelservico = None
         self.cotaunica = None
         self.cotaparcelada = None
         self.data1 = None
@@ -25,12 +28,17 @@ class App(tk.Tk):
         self.data3 = None
         self.c1 = None
         self.c2 = None
+        # self.c3 = None
+        self.c4 = None
         self.tipoextracao = ''
+        self.tiposervico = ''
         self.somentevalores = None
         self.codigosdebarra = None
+        self.nadaconsta = None
+        self.faltantes = True
         self.executar = None
 
-        w = 450
+        w = 500
         # Altura da Janela
         h = 162
 
@@ -51,13 +59,13 @@ class App(tk.Tk):
         self.tipoextracao = tk.StringVar()
         self.cmbtipoextracao = ttk.Combobox(self, textvariable=self.tipoextracao)
         self.cmbtipoextracao['state'] = 'readonly'
-        self.cmbtipoextracao['values'] = ['', 'IPTU', 'Bombeiros', 'Condomínios']
+        self.cmbtipoextracao['values'] = ['', 'Prefeitura', 'Bombeiros', 'Condomínios']
         self.cmbtipoextracao.place(x=252, y=1, width=self.winfo_width()-252)
         self.cmbtipoextracao.current(0)
         self.cmbtipoextracao.bind('<<ComboboxSelected>>', self.extracao_changed)
 
         # Label número cliente
-        self.labelcodigocliente = ttk.Label(self, text='Código Cliente:     ', font="Arial 15 bold")
+        self.labelcodigocliente = ttk.Label(self, text='Código Cliente:         ', font="Arial 15 bold")
         self.labelcodigocliente.place(x=0, y=17, width=self.winfo_width())
         self.labelcodigocliente.configure(anchor='center')
 
@@ -68,7 +76,7 @@ class App(tk.Tk):
 
         # ProgressBar de Quantidade de Transações (Views)
         self.barraextracao = ttk.Progressbar(self, orient=tk.HORIZONTAL, length=200, mode='determinate')
-        self.barraextracao.place(x=75, y=70, width=300)
+        self.barraextracao.place(x=(w-300)/2, y=70, width=300)
 
         # Label de quantidade de extrações
         self.labelquantidade = ttk.Label(self, text='', font="Arial 10")
@@ -85,6 +93,12 @@ class App(tk.Tk):
 
         # Salvar Código de Barras no BD
         self.codigosdebarra = tk.BooleanVar()
+
+        # Extrair Nada Consta
+        self.nadaconsta = tk.BooleanVar()
+
+        # Extrair Nada Consta
+        self.faltantes = tk.BooleanVar(value=True)
 
         self.tipopagamento = tk.IntVar()
         self.tipopagamento.set(2)  # Para a segunda opção ficar marcada
@@ -115,7 +129,7 @@ class App(tk.Tk):
         if len(tipoextracao) > 0:
             if criarradio:
                 self.c1 = tk.Checkbutton(self, text='Somente Valores', variable=self.somentevalores, onvalue=True, offvalue=False, font="Arial 10")
-                self.c1.place(relx=0.046, y=142)
+                self.c1.place(relx=0.040, y=142)
             self.executar.state(["!disabled"])
         else:
             if self.executar is not None:
@@ -137,9 +151,11 @@ class App(tk.Tk):
                     self.labelradio.destroy()
                     self.cotaunica.destroy()
                     self.cotaparcelada.destroy()
+                    self.cmbtiposervico.destroy()
+                    self.labelservico.destroy()
                     # self.c1.destroy()
 
-            case 'IPTU':
+            case 'Prefeitura':
                 if criarradio:
                     # Criando os radio buttons e o label
                     self.labelradio = ttk.Label(self, text='Extrair qual data?')
@@ -154,21 +170,45 @@ class App(tk.Tk):
                     self.data3.place(relx=0.55, y=120)
                     # "Checkbutton" para subir os códigos de barras
                     self.c2 = tk.Checkbutton(self, text='Subir Código de Barras', variable=self.codigosdebarra, onvalue=True, offvalue=False, font="Arial 10")
-                    self.c2.place(relx=0.45, y=142)
+                    self.c2.place(relx=0.30, y=142)
                     self.tipopagamento.set(2)
+                    # "Checkbutton" nada consta
+                    # self.c3 = tk.Checkbutton(self, text='Nada Consta', variable=self.nadaconsta, onvalue=True, offvalue=False, font="Arial 10")
+                    # self.c3.place(relx=0.74, y=142)
+                    # "Checkbutton" de lista completa ou somente faltantes
+                    self.c4 = tk.Checkbutton(self, text='Somente Faltantes?', variable=self.faltantes, onvalue=True, offvalue=False, font="Arial 10")
+                    self.c4.place(relx=0.65, y=142)
+                    # Cria a combobox pra selecionar o serviço da prefeitura
+                    self.tiposervico = tk.StringVar()
+                    self.labelservico = ttk.Label(self, text='Serviço:')
+                    self.labelservico.place(relx=0.70, y=95)
+                    self.cmbtiposervico = ttk.Combobox(self, textvariable=self.tiposervico,)
+                    self.cmbtiposervico['state'] = 'readonly'
+                    self.cmbtiposervico['values'] = ['IPTU', 'Nada Consta', 'Certidão Negativa']
+                    self.cmbtiposervico.place(relx=0.70, y=118, width=110)
+                    self.cmbtiposervico.current(0)
+                    self.cmbtiposervico.bind('<<ComboboxSelected>>', self.extracao_changed)
 
                 else:
                     self.labelradio.destroy()
                     self.cotaunica.destroy()
+                    self.labelservico.destroy()
+                    self.cmbtiposervico.destroy()
                     self.data1.destroy()
                     self.data2.destroy()
                     self.data3.destroy()
                     self.c1.destroy()
                     self.c2.destroy()
+                    # self.c3.destroy()
+                    self.c4.destroy()
 
             case _:
                 if self.labelradio is not None:
                     self.labelradio.destroy()
+                if self.labelservico is not None:
+                    self.labelservico.destroy()
+                if self.cmbtiposervico is not None:
+                    self.cmbtiposervico.destroy()
                 if self.cotaunica is not None:
                     self.cotaunica.destroy()
                 if self.data1 is not None:
@@ -185,6 +225,10 @@ class App(tk.Tk):
                     self.c1.destroy()
                 if self.c2 is not None:
                     self.c2.destroy()
+                # if self.c3 is not None:
+                #     self.c3.destroy()
+                if self.c4 is not None:
+                    self.c4.destroy()
 
         self.atualizatela()
 

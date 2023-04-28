@@ -1,10 +1,15 @@
+# import os
+# import auxiliares as aux
+#
+# aux.adicionarcabecalhopdf(os.path.join(aux.caminhoprojeto('Downloads'), 'Teste.pdf'), 'D:\\Teste.pdf', 'Teste Cabeçalho')
 
 from janela import App
 
 app = App()
 app.mainloop()
-
 """
+
+
 import sensiveis as senha
 import condominios
 import auxiliares as aux

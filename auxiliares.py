@@ -405,72 +405,8 @@ def mid(s, offset, amount):
     return s[(offset - 1):(offset - 1) + amount]
 
 
-def adicionarcabecalhopdf_old(arquivo, arquivodestino, cabecalho, protegido=False):
-    """
-    : param arquivo: arquivo PDF de "entrada".
-    : param arquivodestino: arquivo PDF de saída (já com o cabeçalho).
-    : param cabecalho: texto do cabeçalho a ser adicionado.
-    : return:
-    """
-    import PyPDF2
-    import io
-    from reportlab.pdfgen import canvas
-    from reportlab.lib.pagesizes import letter
-    from reportlab.pdfbase.ttfonts import TTFont
-    from reportlab.pdfbase import pdfmetrics
-
-    packet = io.BytesIO()
-    pdfmetrics.registerFont(TTFont('Arial', 'arial-bold.ttf'))
-    can = canvas.Canvas(packet, pagesize=letter)
-    can.setFont('Arial', 10)
-    can.drawString(500, 820, cabecalho)
-    can.save()
-
-    # move to the beginning of the StringIO buffer
-    packet.seek(0)
-
-    # create a new PDF with Reportlab
-    new_pdf = PyPDF2.PdfFileReader(packet)
-    # read your existing PDF
-    with open(arquivo, 'rb') as p:
-        reader = PyPDF2.PdfFileReader(p)
-        criptografado = reader.isEncrypted
-        existing_pdf = (p.readlines())
-    arquivopdf = reset_eof_of_pdf_return_stream(existing_pdf)
-    arquivoacertado = mid(arquivo, 1, len(arquivo) - 4) + "_acertado" + right(arquivo, 4)
-    if os.path.isfile(arquivoacertado):
-        os.remove(arquivoacertado)
-    # write to new pdf
-    with open(arquivoacertado, 'wb') as f:
-        f.writelines(arquivopdf)
-
-    if os.path.isfile(arquivoacertado) and os.path.isfile(arquivo):
-        os.remove(arquivo)
-
-    renomeararquivo(arquivoacertado, arquivo)
-
-    if os.path.isfile(arquivoacertado):
-        os.remove(arquivoacertado)
-
-    existing_pdf = PyPDF2.PdfFileReader(arquivo)
-
-    output = PyPDF2.PdfFileWriter()
-    # add the "watermark" (which is the new pdf) on the existing page
-    paginas = existing_pdf.getNumPages()
-    for pagina in range(paginas):
-        page = existing_pdf.getPage(pagina)
-        if pagina == 0:
-            page.mergePage(new_pdf.getPage(pagina))
-        output.addPage(page)
-    # finally, write "output" to a real file
-    outputStream = open(arquivodestino, "wb")
-    output.write(outputStream)
-    outputStream.close()
-    if os.path.isfile(arquivo):
-        os.remove(arquivo)
-
-
 def reset_eof_of_pdf_return_stream(pdf_stream_in: list):
+    actual_line = 0
     # find the line position of the EOF
     for i, x in enumerate(pdf_stream_in[::-1]):
         if b'%%EOF' in x:
@@ -483,12 +419,12 @@ def reset_eof_of_pdf_return_stream(pdf_stream_in: list):
 
 
 def extrairtextopdf(caminho):
-    import PyPDF2
+    import pypdf
     import re
     import pandas as pd
 
     texto = ''
-    reader = PyPDF2.PdfFileReader(caminho)
+    reader = pypdf.PdfReader(caminho)
     for pagina in range(reader.getNumPages()):
         p = reader.getPage(pagina)
         texto += p.extractText()
@@ -590,42 +526,134 @@ def timezones_disponiveis():
     return timezones
 
 
-def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, protegido=False):
-    # read pdf using pdfrw
+# def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, protegido=False):
+#     """
+#     :param arquivo: arquivo PDF de "entrada".
+#     :param arquivodestino: arquivo PDF de saída (já com o cabeçalho).
+#     :param cabecalho: texto do cabeçalho a ser adicionado.
+#     :return:
+#     """
+#     import pypdf
+#     import io
+#     from reportlab.pdfgen import canvas
+#     from reportlab.lib.pagesizes import letter
+#     from reportlab.pdfbase.ttfonts import TTFont
+#     from reportlab.pdfbase import pdfmetrics
+#
+#     if not (protegido):
+#         packet = io.BytesIO()
+#         pdfmetrics.registerFont(TTFont('Arial', 'arial-bold.ttf'))
+#         can = canvas.Canvas(packet, pagesize=letter)
+#         can.setFont('Arial', 10)
+#         can.drawString(300, 820, cabecalho)
+#         can.save()
+#
+#         # move to the beginning of the StringIO buffer
+#         packet.seek(0)
+#
+#         # create a new PDF with Reportlab
+#         new_pdf = pypdf.PdfReader(packet)
+#         # read your existing PDF
+#         with open(arquivo, 'rb') as p:
+#             existing_pdf = (p.readlines())
+#         arquivopdf = reset_eof_of_pdf_return_stream(existing_pdf)
+#         arquivoacertado = mid(arquivo, 1, len(arquivo) - 4) + "_acertado" + right(arquivo, 4)
+#         if os.path.isfile(arquivoacertado):
+#             os.remove(arquivoacertado)
+#         # write to new pdf
+#         with open(arquivoacertado, 'wb') as f:
+#             f.writelines(arquivopdf)
+#
+#         if os.path.isfile(arquivoacertado) and os.path.isfile(arquivo):
+#             os.remove(arquivo)
+#
+#         renomeararquivo(arquivoacertado, arquivo)
+#
+#         if os.path.isfile(arquivoacertado):
+#             os.remove(arquivoacertado)
+#
+#         existing_pdf = pypdf.PdfReader(arquivo)
+#
+#         output = pypdf.PdfFileWriter()
+#         # add the "watermark" (which is the new pdf) on the existing page
+#         paginas = existing_pdf.getNumPages()
+#         for pagina in range(paginas):
+#             page = existing_pdf.getPage(pagina)
+#             if pagina == 0:
+#                 page.mergePage(new_pdf.getPage(pagina))
+#             output.addPage(page)
+#         # finally, write "output" to a real file
+#         outputStream = open(arquivodestino, "wb")
+#         output.write(outputStream)
+#         outputStream.close()
+#         if os.path.isfile(arquivo):
+#             os.remove(arquivo)
+#     else:
+#         mover_arquivo(arquivo, arquivodestino)
 
-    from reportlab.pdfgen.canvas import Canvas
-    from reportlab.pdfbase.ttfonts import TTFont
-    from reportlab.pdfbase import pdfmetrics
-    from pdfrw import PdfReader
-    from pdfrw.buildxobj import pagexobj
-    from pdfrw.toreportlab import makerl
 
-    if not protegido:
-        reader = PdfReader(arquivo)
-        pages = [pagexobj(p) for p in reader.pages]
-        pdfmetrics.registerFont(TTFont('Arial', 'arial-bold.ttf'))
-        # Compose new pdf
-        canvas = Canvas(arquivodestino)
-        for page_num, page in enumerate(pages, start=1):
-            # Add page with the page size
-            # Here BBox denotes a bounding box
-            canvas.setPageSize((page.BBox[2], page.BBox[3]))
+def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho):
+    import fitz
 
-            # make a report lab object
-            canvas.doForm(makerl(canvas, page))
-            # Draw footer
+    # Abre o arquivo PDF que quer adicionar o cabeçalho
+    with fitz.open(arquivo) as pdf:
+        # Verifica se está protegido por senha
+        if pdf.is_encrypted:
+            # Caso esteja protegido por senha chama outra função com outra biblioteca para gerar uma cópia sem senha
+            # (não funciona para retirar a senha de leitura), a função retorna se conseguiu gerar a cópia desbloqueada
+            # ou não (se consegue ela já descarta o original com senha)
+            desbloqueado = removersenhapdf(arquivo)
 
-            canvas.saveState()
-            canvas.setFont('Arial', 10)
-            if page_num == 1:
-                canvas.drawString(250, 820, cabecalho)
-            canvas.restoreState()
-            canvas.showPage()
-        canvas.save()
-        if os.path.isfile(arquivo):
-            os.remove(arquivo)
-    else:
-        mover_arquivo(arquivo, arquivodestino)
+        # Verifica se o arquivo não era criptografado ou se era e a função "removersenhapdf" retirou a senha
+        if not pdf.is_encrypted or desbloqueado:
+            # Carrega a fonte em memória
+            fonte = fitz.Font(fontfile=os.path.join(caminhoprojeto(), 'arial-bold.ttf'))
+
+            # "Varre" as páginas do PDF
+            for pg in pdf:
+                # Verificar se é a primeira página
+                if pg.number == 0:
+                    # Cálculo de meio da página
+                    largura_pagina = pg.mediabox_size.x
+                    # Verifica o tamanho do texto considerando a fonte informada na variável "fonte" no início da função
+                    largura_texto = fonte.text_length(cabecalho, 10)
+                    posicao_x = (largura_pagina - largura_texto) / 2
+                    posicao_y = 20
+                    # Insere o cabeçalho no meio da página
+                    pg.insert_text((posicao_x, posicao_y), cabecalho, fontsize=10, color=(0, 0, 0), fontfile=fonte)
+                    # Para o FOR porque só quero o cabeçalho na primeira página
+                    break
+        # Salvo o arquivo com o cabeçalho
+        pdf.save(arquivodestino)
+    # Verifica se o arquivo foi salvo
+    if os.path.isfile(arquivodestino):
+        # Apaga o arquivo original
+        os.remove(arquivo)
+
+
+def removersenhapdf(arquivobloqueado):
+    import pikepdf
+
+    desbloqueado = False
+
+    if os.path.isfile(arquivobloqueado):
+        caminho, extensao = os.path.splitext(arquivobloqueado)
+        # Abre o arquivo e cria uma cópia sem senha
+        with pikepdf.open(arquivobloqueado) as pdf:
+            pdf.save(caminho+'Desbloqueado'+extensao)
+
+        # Verifica se o arquivo desbloqueado foi gerado
+        if os.path.isfile(caminho+'Desbloqueado'+extensao):
+            with pikepdf.open(caminho+'Desbloqueado'+extensao) as pdf:
+                desbloqueado = not pdf.is_encrypted
+
+            if desbloqueado:
+                os.remove(arquivobloqueado)
+                os.rename(caminho+'Desbloqueado'+extensao, arquivobloqueado)
+            else:
+                os.remove(caminho+'Desbloqueado'+extensao)
+
+    return desbloqueado
 
 
 def encontrar_administradora(administradora, campo='Administradora'):

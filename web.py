@@ -444,7 +444,7 @@ class TratarSite:
 
         return tabela
 
-    def pegaarquivobaixado(self, timeout, quantabas=0, caminhobaixado=''):
+    def pegaarquivobaixado(self, timeout, quantabas=0, caminhobaixado='', caminhocompleto = False):
         if quantabas > 0:
             while self.num_abas() > quantabas:
                 time.sleep(1)
