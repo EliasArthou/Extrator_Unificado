@@ -182,7 +182,7 @@ class App(tk.Tk):
                     self.tiposervico = tk.StringVar()
                     self.labelservico = ttk.Label(self, text='Serviço:')
                     self.labelservico.place(relx=0.70, y=95)
-                    self.cmbtiposervico = ttk.Combobox(self, textvariable=self.tiposervico,)
+                    self.cmbtiposervico = ttk.Combobox(self, textvariable=self.tiposervico)
                     self.cmbtiposervico['state'] = 'readonly'
                     self.cmbtiposervico['values'] = ['IPTU', 'Nada Consta', 'Certidão Negativa']
                     self.cmbtiposervico.place(relx=0.70, y=118, width=110)

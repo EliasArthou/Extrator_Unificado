@@ -327,6 +327,8 @@ class TratarSite:
         if self.navegador is not None and hasattr(self.navegador, 'quit'):
             self.navegador.quit()
 
+
+
     def resolvercaptcha(self, identificacaocaixa, caixacaptcha, identicacaobotao, botao):
         """
         :param identificacaocaixa: opção de como a caixa de texto do captcha será identificada (ID, NAME, CLASS, ETC.)
@@ -444,52 +446,60 @@ class TratarSite:
 
         return tabela
 
-    def pegaarquivobaixado(self, timeout, quantabas=0, caminhobaixado='', caminhocompleto = False):
+    def pegaarquivobaixado(self, timeout, quantabas=0, caminhobaixado=''):
         if quantabas > 0:
             while self.num_abas() > quantabas:
                 time.sleep(1)
-        self.navegador.execute_script("window.open()")
-        # switch to new tab
-        self.navegador.switch_to.window(self.navegador.window_handles[-1])
-        # navigate to chrome downloads
-        self.navegador.get('chrome://downloads')
+        quantabas = self.num_abas()
+        self.navegador.execute_script('window.open()')
         time.sleep(1)
-        # define the endTime
-        endTime = time.time() + timeout
-        while True:
-            try:
-                # get downloaded percentage
-                downloadPercentage = self.navegador.execute_script(
-                    "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('#progress').value")
-                # check if downloadPercentage is 100 (otherwise the script will keep waiting)
-                if downloadPercentage == 100:
-                    # return the file name once the download is completed
-                    return self.navegador.execute_script(
-                        "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('div#content  #file-link').text")
-
-            except BaseException as err:
-                try:
-                    arquivo = self.navegador.execute_script(
-                        "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('div#content  #file-link').text")
-                    if len(arquivo) > 0:
-                        return arquivo
-                    else:
-                        pass
-
-                except Exception as e:
-                    # Obtendo o caminho da pasta de downloads padrão do Chrome
-                    if len(caminhobaixado) > 0:
-                        # Espera o download finalizar
-                        self.esperadownloads(caminhobaixado, timeout)
-                        # Pega o último arquivo baixado da pasta
-                        arquivo = aux.ultimoarquivo(caminhobaixado, 'pdf')
-                        return os.path.basename(arquivo)
-
-            finally:
-                time.sleep(1)
-                if self.navegador.current_url == 'chrome://downloads/':
-                    self.fecharaba()
-
+        if quantabas < self.num_abas():
+            # switch to new tab
+            self.navegador.switch_to.window(self.navegador.window_handles[-1])
+            # navigate to chrome downloads
+            self.navegador.get('chrome://downloads')
             time.sleep(1)
-            if time.time() > endTime:
-                break
+            # define the endTime
+            endTime = time.time() + timeout
+            while True:
+                try:
+                    # get downloaded percentage
+                    downloadPercentage = self.navegador.execute_script(
+                        "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('#progress').value")
+                    # check if downloadPercentage is 100 (otherwise the script will keep waiting)
+                    if downloadPercentage == 100:
+                        time.sleep(1)
+                        # return the file name once the download is completed
+                        return self.navegador.execute_script(
+                            "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('div#content  #file-link').text")
+                    time.sleep(1)
+
+                except BaseException as err:
+                    try:
+                        time.sleep(1)
+                        arquivo = self.navegador.execute_script(
+                            "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('div#content  #file-link').text")
+                        if len(arquivo) > 0:
+                            return arquivo
+                        else:
+                            pass
+
+                    except Exception as e:
+                        # Obtendo o caminho da pasta de downloads padrão do Chrome
+                        if len(caminhobaixado) > 0:
+                            # Espera o download finalizar
+                            self.esperadownloads(caminhobaixado, timeout, 1)
+                            # Pega o último arquivo baixado da pasta
+                            arquivo = aux.ultimoarquivo(caminhobaixado, 'pdf')
+                            return os.path.basename(arquivo)
+
+                finally:
+                    time.sleep(1)
+                    if self.num_abas() > 1:
+                        if self.irparaaba(titulo='Downloads'):
+                            if self.navegador.current_url == 'chrome://downloads/':
+                                self.fecharaba()
+
+                time.sleep(1)
+                if time.time() > endTime:
+                    break

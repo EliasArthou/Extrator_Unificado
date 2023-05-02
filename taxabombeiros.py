@@ -2,6 +2,8 @@ import datetime
 import web
 import auxiliares as aux
 import sensiveis as senha
+import sys
+import messagebox as msg
 
 
 Codigo = 0
@@ -22,16 +24,16 @@ def taxabombeiro(objeto, linha):
     try:
         gerarboleto = not objeto.somentevalores.get()
 
-        # self.listachaves = ['Cod Cliente', 'Nº CBMERJ', 'Área Construída', 'Utilização', 'Faixa', 'Proprietário', 'Endereço',
+        # objeto.listachaves = ['Cod Cliente', 'Nº CBMERJ', 'Área Construída', 'Utilização', 'Faixa', 'Proprietário', 'Endereço',
         #                     'taxa[anos_em_debito]', 'taxa[Exercicio]', 'taxa[Parcela]', 'taxa[Vencimento]', 'taxa[Valor]',
         #                     'taxa[Mora]', 'taxa[Total]', 'Status']
-        # self.listaexcel = []
+        # objeto.listaexcel = []
         site = web.TratarSite(senha.siteCBM, senha.nomeprofileCBM)
 
-        # for indice, linha in enumerate(self.resultado):
+        # for indice, linha in enumerate(objeto.resultado):
 
         if aux.hora('America/Sao_Paulo', 'HORA') < datetime.time(22, 00, 00) and objeto.texto != 'Este serviço encontra-se temporariamente indisponível.':
-            codigocliente = linha['codigo']
+            codigocliente = linha[Codigo]
             # ==================== Parte Gráfica =======================================================
             objeto.visual.mudartexto('labelcodigocliente', 'Código Cliente: ' + codigocliente)
             cbm = str(linha['cbm'])
@@ -41,7 +43,7 @@ def taxabombeiro(objeto, linha):
             # continuar tentando resolver o CAPTCHA (caso não tenha sido resolvido) em "looping"
             while not resolveucaptcha and aux.hora('America/Sao_Paulo', 'HORA') < datetime.time(22, 00, 00):
                 # Variável que vai receber o texto de erro do site (caso exista)
-                self.texto = ''
+                objeto.texto = ''
                 # Verifica a hora para entrar no site, caso esteja fora do horário válido, nem inicia
                 if aux.hora('America/Sao_Paulo', 'HORA') < datetime.time(22, 00, 00):
                     # Verifica se o chrome está aberta
@@ -150,7 +152,7 @@ def taxabombeiro(objeto, linha):
                                                 linhanova.update({'Status': 'Imposto Ano Corrente'})
 
                                             # Insere a linha formada da junção das listas no Excel
-                                            self.listaexcel.append(linhanova)
+                                            objeto.listaexcel.append(linhanova)
                                             # Popula a lista de anos que fazem parte da extração
                                             listaanos.append(linhanova['taxa[Exercicio]'])
 
@@ -198,7 +200,7 @@ def taxabombeiro(objeto, linha):
                                                                 # Verifica se o botão de impressão existe
                                                                 if imprimir is not None:
                                                                     # Muda o status na tela
-                                                                    self.visual.mudartexto('labelstatus', 'Salvando Boleto...')
+                                                                    objeto.visual.mudartexto('labelstatus', 'Salvando Boleto...')
                                                                     # Ativa o botão de imprimir do visualizar impressão
                                                                     site.navegador.execute_script('window.print();')
                                                                     # Pasta Download inicial
@@ -217,10 +219,10 @@ def taxabombeiro(objeto, linha):
                                                                     if len(baixado) > 0:
                                                                         # Define o nome do arquivo (adicionando o índice de ano quando necessário)
                                                                         if indiceano == 0:
-                                                                            caminhodestino = self.pastadownload + '/' + listaanos[indicebotao - 1] + '_' + codigocliente + '_' + \
+                                                                            caminhodestino = objeto.pastadownload + '/' + listaanos[indicebotao - 1] + '_' + codigocliente + '_' + \
                                                                                              linha['cbm'] + '.pdf'
                                                                         else:
-                                                                            caminhodestino = self.pastadownload + '/' + listaanos[indicebotao - 1] + '_' + codigocliente + '_' + \
+                                                                            caminhodestino = objeto.pastadownload + '/' + listaanos[indicebotao - 1] + '_' + codigocliente + '_' + \
                                                                                              linha['cbm'] + '_' + str(indiceano) + '.pdf'
 
                                                                         # Trata o caminho para ignorar caracteres especiais no endereço
@@ -236,7 +238,7 @@ def taxabombeiro(objeto, linha):
                                                                 # Vai para última aba para não fechar a aba que tem os botões de gerar boleto
                                                                 site.irparaaba(site.num_abas())
                                                         # Se a opção de boleto único for marcada ele não continua extraindo os boletos do parcelamento
-                                                        if self.resposta == 1 and indiceano == 1 and listaanos[len(listaanos) - 1] == listaanos[indicebotao - 1]:
+                                                        if objeto.resposta == 1 and indiceano == 1 and listaanos[len(listaanos) - 1] == listaanos[indicebotao - 1]:
                                                             break
 
                                             # Verifica se o site está na memória
@@ -251,8 +253,8 @@ def taxabombeiro(objeto, linha):
                                         dadoscbm = [codigocliente, aux.left(str(linha['cbm']), 7) + '-' + aux.right(str(linha['cbm']), 1), '', '', '', '', '', '', '', '', '',
                                                     '', '', '', mensagemerro]
                                         # Adiciona o item com o cabeçalho
-                                        if len(dadoscbm) == len(self.listachaves):
-                                            self.listaexcel.append(dict(zip(self.listachaves, dadoscbm)))
+                                        if len(dadoscbm) == len(objeto.listachaves):
+                                            objeto.listaexcel.append(dict(zip(objeto.listachaves, dadoscbm)))
                                         else:
                                             print(mensagemerro)
                                     # Fecha o site
@@ -263,17 +265,14 @@ def taxabombeiro(objeto, linha):
                                 break
         else:
             # Mensagem de horário inválido para gerar boleto
-            self.visual.acertaconfjanela(False)
+            objeto.visual.acertaconfjanela(False)
             # Texto quando o serviço está indisponível
-            if self.texto != 'Este serviço encontra-se temporariamente indisponível.':
+            if objeto.texto != 'Este serviço encontra-se temporariamente indisponível.':
                 # Caso o erro não seja de serviço indisponível o horário é inválido
                 msg.msgbox('Impossível gerar boletos depois das 22:00!', msg.MB_OK, 'Horário Inválido')
             else:
                 # Mensagem de serviço indisponível
                 msg.msgbox('Serviço fora do ar!', msg.MB_OK, 'Serviço com problemas')
-
-            # Sai do Looping
-            break
 
     except Exception as e:
         with open("Log_" + aux.acertardataatual() + ".txt", "a") as myfile:

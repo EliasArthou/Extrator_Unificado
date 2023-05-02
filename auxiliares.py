@@ -596,39 +596,40 @@ def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho):
     import fitz
 
     # Abre o arquivo PDF que quer adicionar o cabeçalho
-    with fitz.open(arquivo) as pdf:
-        # Verifica se está protegido por senha
-        if pdf.is_encrypted:
-            # Caso esteja protegido por senha chama outra função com outra biblioteca para gerar uma cópia sem senha
-            # (não funciona para retirar a senha de leitura), a função retorna se conseguiu gerar a cópia desbloqueada
-            # ou não (se consegue ela já descarta o original com senha)
-            desbloqueado = removersenhapdf(arquivo)
+    if os.path.isfile(arquivo):
+        with fitz.open(arquivo) as pdf:
+            # Verifica se está protegido por senha
+            if pdf.is_encrypted:
+                # Caso esteja protegido por senha chama outra função com outra biblioteca para gerar uma cópia sem senha
+                # (não funciona para retirar a senha de leitura), a função retorna se conseguiu gerar a cópia desbloqueada
+                # ou não (se consegue ela já descarta o original com senha)
+                desbloqueado = removersenhapdf(arquivo)
 
-        # Verifica se o arquivo não era criptografado ou se era e a função "removersenhapdf" retirou a senha
-        if not pdf.is_encrypted or desbloqueado:
-            # Carrega a fonte em memória
-            fonte = fitz.Font(fontfile=os.path.join(caminhoprojeto(), 'arial-bold.ttf'))
+            # Verifica se o arquivo não era criptografado ou se era e a função "removersenhapdf" retirou a senha
+            if not pdf.is_encrypted or desbloqueado:
+                # Carrega a fonte em memória
+                fonte = fitz.Font(fontfile=os.path.join(caminhoprojeto(), 'arial-bold.ttf'))
 
-            # "Varre" as páginas do PDF
-            for pg in pdf:
-                # Verificar se é a primeira página
-                if pg.number == 0:
-                    # Cálculo de meio da página
-                    largura_pagina = pg.mediabox_size.x
-                    # Verifica o tamanho do texto considerando a fonte informada na variável "fonte" no início da função
-                    largura_texto = fonte.text_length(cabecalho, 10)
-                    posicao_x = (largura_pagina - largura_texto) / 2
-                    posicao_y = 20
-                    # Insere o cabeçalho no meio da página
-                    pg.insert_text((posicao_x, posicao_y), cabecalho, fontsize=10, color=(0, 0, 0), fontfile=fonte)
-                    # Para o FOR porque só quero o cabeçalho na primeira página
-                    break
-        # Salvo o arquivo com o cabeçalho
-        pdf.save(arquivodestino)
-    # Verifica se o arquivo foi salvo
-    if os.path.isfile(arquivodestino):
-        # Apaga o arquivo original
-        os.remove(arquivo)
+                # "Varre" as páginas do PDF
+                for pg in pdf:
+                    # Verificar se é a primeira página
+                    if pg.number == 0:
+                        # Cálculo de meio da página
+                        largura_pagina = pg.mediabox_size.x
+                        # Verifica o tamanho do texto considerando a fonte informada na variável "fonte" no início da função
+                        largura_texto = fonte.text_length(cabecalho, 10)
+                        posicao_x = (largura_pagina - largura_texto) / 2
+                        posicao_y = 20
+                        # Insere o cabeçalho no meio da página
+                        pg.insert_text((posicao_x, posicao_y), cabecalho, fontsize=10, color=(0, 0, 0), fontfile=fonte)
+                        # Para o FOR porque só quero o cabeçalho na primeira página
+                        break
+            # Salvo o arquivo com o cabeçalho
+            pdf.save(arquivodestino)
+        # Verifica se o arquivo foi salvo
+        if os.path.isfile(arquivodestino):
+            # Apaga o arquivo original
+            os.remove(arquivo)
 
 
 def removersenhapdf(arquivobloqueado):
@@ -727,9 +728,9 @@ def retornastrinflistaadm(campo):
 def retornarlistaboletos(listaadministradora=None):
     if listaadministradora is not None:
         string_nomes_administradoras = ', '.join(["'{}'".format(item) for item in listaadministradora])
-        sql = (senha.sqlcondominios + ' WHERE NomeAdm in (%s)' % string_nomes_administradoras)
+        sql = (senha.sqlcondominios + ' WHERE NomeAdm in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
     else:
-        sql = (senha.sqlcondominios + ' WHERE NomeAdm in (%s)' % retornastrinflistaadm('nomereal'))
+        sql = (senha.sqlcondominios + ' WHERE NomeAdm in (%s) ORDER BY Codigo;' % retornastrinflistaadm('nomereal'))
 
     return sql
 
