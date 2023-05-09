@@ -109,7 +109,6 @@ class Extrator:
             if self.resultado:
                 self.resultado.sort(key=lambda x: x[0])
 
-
         self.bd.fecharbanco()
 
         match self.extracao:
@@ -136,6 +135,7 @@ class Extrator:
             # Fecha o browser
             self.site.fecharsite()
 
+        self.criarlog()
         # finally:
         #     # Verifica se o browser está aberto
         #     if self.site is not None:
@@ -435,35 +435,41 @@ class Extrator:
         : param visual: janela a ser manipulada.
         """
 
-        # try:
-        # gerarboleto = not self.visual.somentevalores.get()
-        # salvardadospdf = self.visual.codigosdebarra.get()
+        try:
 
-        # self.visual.acertaconfjanela(False)
+            self.listachaves = ['Código Cliente', 'Inscrição', 'Guia do Exercício', 'Nr Guia', 'Valor', 'Contribuinte', 'Endereço', 'Status']
+            self.listaexcel = []
+            # site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
 
-        self.listachaves = ['Código Cliente', 'Inscrição', 'Guia do Exercício', 'Nr Guia', 'Valor', 'Contribuinte', 'Endereço', 'Status']
-        self.listaexcel = []
-        # site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
+            for indice, linha in enumerate(self.resultado):
+                codigocliente = linha[Biptu.Codigo]
+                # ===================================== Parte Gráfica =======================================================
+                self.visual.mudartexto('labelcodigocliente', 'Código Cliente: ' + codigocliente)
+                iptu = str(linha[Biptu.NrIPTU])
+                iptu = str(iptu.strip()).zfill(8)
+                iptu = '{}.{}{}{}.{}{}{}-{}'.format(*iptu)
+                self.visual.mudartexto('labelinscricao', 'Inscrição Imobiliária: ' + iptu)
 
-        for indice, linha in enumerate(self.resultado):
+                self.visual.mudartexto('labelquantidade', 'Item ' + str(indice + 1) + ' de ' + str(len(self.resultado)) + '...')
+                self.visual.mudartexto('labelstatus', 'Extraindo boleto...')
+                # Atualiza a barra de progresso das transações (Views)
+                self.visual.configurarbarra('barraextracao', len(self.resultado), indice + 1)
+                time.sleep(0.1)
+                # ===================================== Parte Gráfica =======================================================
 
-            codigocliente = linha[Biptu.Codigo]
-            # ===================================== Parte Gráfica =======================================================
-            self.visual.mudartexto('labelcodigocliente', 'Código Cliente: ' + codigocliente)
-            iptu = str(linha[Biptu.NrIPTU])
-            iptu = str(iptu.strip()).zfill(8)
-            iptu = '{}.{}{}{}.{}{}{}-{}'.format(*iptu)
-            self.visual.mudartexto('labelinscricao', 'Inscrição Imobiliária: ' + iptu)
+                dadosiptu, df = Biptu.extrairboletos(self, linha)
+                if df is not None:
+                    self.bd.adicionardf('Codigos IPTUs', df, 7)
 
-            self.visual.mudartexto('labelquantidade', 'Item ' + str(indice + 1) + ' de ' + str(len(self.resultado)) + '...')
-            self.visual.mudartexto('labelstatus', 'Extraindo boleto...')
-            # Atualiza a barra de progresso das transações (Views)
-            self.visual.configurarbarra('barraextracao', len(self.resultado), indice + 1)
-            time.sleep(0.1)
-            # ===================================== Parte Gráfica =======================================================
+                if len(dadosiptu) > 0:
+                    self.listadados.append(dadosiptu)
+                else:
+                    print('Vazio')
+                # self.listaexcel.append(dict(zip(self.listachaves, dadosiptu)))
 
-            dadosiptu = Biptu.extrairboletos(self, linha)
-            print(dadosiptu)
+        except Exception as e:
+            # print(f"Erro:{str(e)}")
+            msg.msgbox(str(e), msg.MB_OK, 'Erro')
 
     def extraircondominio(self):
         self.visual.acertaconfjanela(False)
@@ -496,7 +502,7 @@ class Extrator:
                 self.visual.mudartexto('labelstatus', linha[condominios.Resposta])
 
     def criarlistadicionarios(self):
-        # Verifica se tem dados e cabeçalhos nas respectivas linhas e se as mesmas tem a mesma quantidade de colunas
+        # Verifica se tem dados e cabeçalhos nas respectivas linhas e se as mesmas têm a mesma quantidade de colunas
         if len(self.listachaves) > 0 and len(self.listadados) > 0 and all(len(sublist) == len(self.listachaves) for sublist in self.listadados):
             lista_de_dicionarios = []
             for valores_correspondentes in self.listadados:

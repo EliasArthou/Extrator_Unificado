@@ -185,9 +185,9 @@ class App(tk.Tk):
                     self.cmbtiposervico = ttk.Combobox(self, textvariable=self.tiposervico)
                     self.cmbtiposervico['state'] = 'readonly'
                     self.cmbtiposervico['values'] = ['IPTU', 'Nada Consta', 'Certidão Negativa']
-                    self.cmbtiposervico.place(relx=0.70, y=118, width=110)
+                    self.cmbtiposervico.place(relx=0.70, y=118, width=120)
                     self.cmbtiposervico.current(0)
-                    self.cmbtiposervico.bind('<<ComboboxSelected>>', self.extracao_changed)
+                    # self.cmbtiposervico.bind('<<ComboboxSelected>>', self.servico_changed)
 
                 else:
                     self.labelradio.destroy()
@@ -237,6 +237,11 @@ class App(tk.Tk):
         """ Evento de mudança do combobox """
         self.manipularradio('', True)
         self.manipularradio(self.tipoextracao.get(), True)
+
+    def servico_changed(self, event):
+        """ Evento de mudança do combobox """
+        # self.manipularradio('', True)
+        # self.manipularradio(self.tipoextracao.get(), True)
 
     def executar_clicked(self):
         """

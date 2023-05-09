@@ -9,6 +9,8 @@ import pypyodbc as pyodbc
 import glob
 import shutil
 import sensiveis as senha
+import requests
+import pandas as pd
 
 caminho = ''
 
@@ -53,7 +55,6 @@ class Banco:
                     self.conxn.commit()
 
                 strSQL = "INSERT INTO [" + tabela + "] VALUES (%s)" % ', '.join(my_list)
-                print(strSQL)
                 self.cursor.execute(strSQL)
                 self.conxn.commit()
 
@@ -189,7 +190,7 @@ def escreverlistaexcelog(caminho, lista):
     : param caminho: caminho do arquivo a ser escrito.
     : param lista: lista a ser adicionada no arquivo do caminho dado.
     """
-    import pandas as pd
+
 
     df = pd.DataFrame(lista)
 
@@ -419,76 +420,94 @@ def reset_eof_of_pdf_return_stream(pdf_stream_in: list):
 
 
 def extrairtextopdf(caminho):
-    import pypdf
+    import PyPDF2
     import re
-    import pandas as pd
 
     texto = ''
-    reader = pypdf.PdfReader(caminho)
-    for pagina in range(reader.getNumPages()):
-        p = reader.getPage(pagina)
-        texto += p.extractText()
 
-    lista = re.findall(r'([\d].[\d]{3}.[\d]{3}-[\d])[\d]{2}', texto)
+    with open(caminho, 'rb') as arquivo:
+        reader = PyPDF2.PdfReader(arquivo)
+        for pagina in range(len(reader.pages)):
+            p = reader.pages[pagina]
+            texto += p.extract_text()
+
+    # reader = pypdf.PdfReader(caminho)
+    # for pagina in range(reader.getNumPages()):
+    #     p = reader.getPage(pagina)
+    #     texto += p.extractText()
+
+    lista = re.findall(r'([\d]{1}.[\d]{3}.[\d]{3}-[\d]{1})\n[\d]{2}', texto)
     listalimpa = []
     for indice, linha in enumerate(lista):
         if indice % 2:
             linha = linha.replace('.', '')
             linha = linha.replace('-', '')
             linha = linha.replace('\n', '')
-            listalimpa.append(linha)
+            listalimpa.append("'" + linha + "'")
     df = pd.DataFrame(listalimpa, columns=['Inscricao'])
 
-    lista = re.findall(r'COMPETÊNCIA([\d]{4})[\d]{2}', texto)
+    lista = re.findall(r'COMPETÊNCIA\n([\d]{4})\n[\d]{2}', texto)
     listalimpa = []
     for indice, linha in enumerate(lista):
         if indice % 2:
-            listalimpa.append(linha.replace('\n', ''))
+            listalimpa.append("'" + linha.replace('\n', '') + "'")
     df['Competencia'] = listalimpa
+    # df['Competencia'] = lista
 
-    lista = re.findall(r'([\d]{2}/[\d]{2}/[\d]{4})[\d]{2}', texto)
+    lista = re.findall(r'([\d]{2}/[\d]{2}/[\d]{4})\n[\d]{2}', texto)
     listalimpa = []
     for indice, linha in enumerate(lista):
         if indice % 2:
-            listalimpa.append(linha.replace('\n', ''))
+            listalimpa.append("'" + linha.replace('\n', '') + "'")
     df['Vencimentos'] = listalimpa
+    # df['Vencimentos'] = lista
 
-    lista = re.findall(r'CONTRIBUINTE([\D]*)[\d]{2}.', texto)
+    lista = re.findall(r'CONTRIBUINTE\n([\D]*)[\d]{2}.', texto)
     listalimpa = []
     for indice, linha in enumerate(lista):
         if indice % 2:
-            listalimpa.append(linha.replace('\n', ''))
+            listalimpa.append("'" + linha.replace('\n', '') + "'")
     df['Contribuinte'] = listalimpa
+    # df['Contribuinte'] = lista
 
-    lista = re.findall(r'AUTENTICAÇÃO AUTOMÁTICA[\D]PARA USO DO BANCO[\D]([\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d])[\D]', texto)
-    df['Codigo de Barras'] = lista
+    lista = re.findall(r'AUTENTICAÇÃO AUTOMÁTICA[\D]PARA USO DO BANCO[\D]\n([\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d])[\D]', texto)
+    # listalimpa = []
+    # for indice, linha in enumerate(lista):
+    #     if indice % 2:
+    #         listalimpa.append(linha.replace('\n', ''))
+    # df['Codigo de Barras'] = listalimpa
+    listalimpa = [f"'{item}'" for item in lista]
+    df['Codigo de Barras'] = listalimpa
 
-    lista = re.findall(r'GUIA/COTA([\d]{2}/[\d]{2})', texto)
+    lista = re.findall(r'GUIA/COTA\n([\d]{2}/[\d]{2})', texto)
     listalimpa = []
     for indice, linha in enumerate(lista):
         if indice % 2:
-            listalimpa.append(linha.replace('\n', ''))
+            listalimpa.append("'" + linha.replace('\n', '') + "'")
     df['Guia'] = listalimpa
 
-    lista = re.findall(r'VALOR TOTAL([\d]*,[\d]{2})[\d]{2}.', texto)
+    # lista = re.findall(r'VALOR TOTAL\n([\d]*,[\d]{2})\n[\d]{2}.', texto)
+    lista = re.findall(r'VALOR TOTAL\n(\d+(?:\.\d{3})*,\d{2})', texto)
     listalimpa = []
     for indice, linha in enumerate(lista):
         if indice % 2:
-            listalimpa.append(linha)
+            listalimpa.append("'" + linha + "'")
     df['Valor Total'] = listalimpa
+    # df['Valor Total'] = lista
 
-    lista = re.findall(r'GUIA/COTA[\d]{2}/([\d]{2})', texto)
+    lista = re.findall(r'GUIA/COTA\n[\d]{2}/([\d]{2})', texto)
     listalimpa = []
     for indice, linha in enumerate(lista):
         if indice % 2:
-            listalimpa.append(str(int(linha)))
+            listalimpa.append("'" + str(int(linha)) + "'")
     df['Parcela'] = listalimpa
+    # df['Parcela'] = lista
 
     return df
 
 
 def hora(timezone, pedaco=''):
-    import requests
+
     import datetime
 
     url = 'http://worldtimeapi.org/api/timezone/' + timezone
@@ -518,8 +537,6 @@ def hora(timezone, pedaco=''):
 
 
 def timezones_disponiveis():
-    import requests
-
     url = 'http://worldtimeapi.org/api/timezone/'
     resposta = requests.get(url)
     timezones = resposta.json()

@@ -98,6 +98,7 @@ def abrj(objeto, linha):
                             if msgerro is None:
                                 # Operação normal
                                 testalistacondominio = site.verificarobjetoexiste('CSS_SELECTOR', "[class='item-menu lista-condominio']")
+
                                 if testalistacondominio is not None:
                                     listacondominios = site.verificarobjetoexiste('CSS_SELECTOR', "[href = '#']", itemunico=False)
                                     achoucondominio = False
