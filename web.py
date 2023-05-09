@@ -1,3 +1,4 @@
+
 from selenium import webdriver
 import io
 from PIL import Image
@@ -326,8 +327,6 @@ class TratarSite:
         """
         if self.navegador is not None and hasattr(self.navegador, 'quit'):
             self.navegador.quit()
-
-
 
     def resolvercaptcha(self, identificacaocaixa, caixacaptcha, identicacaobotao, botao):
         """

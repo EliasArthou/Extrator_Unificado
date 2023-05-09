@@ -11,6 +11,7 @@ import shutil
 import sensiveis as senha
 import requests
 import pandas as pd
+import win32gui
 
 caminho = ''
 
@@ -683,7 +684,6 @@ def encontrar_administradora(administradora, campo='Administradora'):
 
 
 def salvarcomo(caminhoarquivo, tempoespera):
-    import win32gui
     import win32con
     import win32api
 
@@ -718,8 +718,6 @@ def salvarcomo(caminhoarquivo, tempoespera):
 
 
 def wait_for_window(title, max_wait_seconds):
-    import win32gui
-
     """Espera até que uma janela com o título especificado seja encontrada ou o tempo máximo de espera seja atingido."""
     start_time = time.time()
     while True:
