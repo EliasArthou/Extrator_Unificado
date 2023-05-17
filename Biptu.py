@@ -16,17 +16,18 @@ IndiceIPTU = 2
 tempoesperadownload = 180
 
 
-def extrairboletos(objeto, linha):
+def extrairboletos(objeto, linha, nrguia=0, site=None):
     """
     : param linha: a linha de dados a ser analisada.
     : param objeto: janela a ser manipulada.
     """
-
-    site = None
     dadosiptu = []
-    dadosintermediario = []
+    # dadosintermediario = []
     df = None
     caminhodestino = ''
+    guias = None
+    mensagemerro = None
+    mensagemguia = None
 
     try:
         errocarregamentosite = 'Exception: Message TelaSelecao was received; the expected message was SegundaTela.<br />' \
@@ -39,28 +40,35 @@ def extrairboletos(objeto, linha):
         # Define com qual data de vencimento tem que gerar
         resposta = str(objeto.visual.tipopagamento.get())
 
-        site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
+        if site is None:
+            site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
+        else:
+            site.delay = 2
+            guias = site.verificarobjetoexiste('CSS_SELECTOR', '[title="Clique aqui para visualizar / imprimir esta guia."]', itemunico=False)
+            site.delay = 10
+            if guias is not None:
+                mensagemerro = None
+                mensagemguia = None
 
         codigocliente = linha[Codigo]
         # Informa que a parte da extração está sendo feita
         objeto.visual.mudartexto('labelstatus', 'Extraindo boleto...')
         if gerarboleto:
             caminhodestino = os.path.join(objeto.pastadownload, codigocliente + '_' + linha[NrIPTU] + '.pdf')
-            nomearquivo = codigocliente + '_' + linha[NrIPTU] + '.pdf'
-        mensagemerro = None
 
         # Verifica se o arquivo já existe e se não está pedindo pra pegar as informações do site
         # Se o arquivo existir ele pega as informações do arquivo
         if not os.path.isfile(caminhodestino) or not gerarboleto:
-            if site is not None:
-                site.fecharsite()
-            site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
-            site.abrirnavegador()
-            if site.url != senha.siteiptu or site is None:
+            if guias is None:
                 if site is not None:
                     site.fecharsite()
                 site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
                 site.abrirnavegador()
+                if site.url != senha.siteiptu or site is None:
+                    if site is not None:
+                        site.fecharsite()
+                    site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
+                    site.abrirnavegador()
 
             if site is not None and site.navegador != -1:
                 # Campo de Inscrição da tela Inicial
@@ -76,8 +84,10 @@ def extrairboletos(objeto, linha):
                             else:
                                 site.navegador.execute_script("arguments[0].click()", botaogerar)
 
+                            site.delay = 2
                             # Verifica se teve mensagem de erro
                             mensagemerro = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_MENSAGEM')
+                            site.delay = 10
                             if mensagemerro is not None:
                                 if hasattr(mensagemerro, 'text'):
                                     while mensagemerro.text == errocarregamentosite:
@@ -107,17 +117,19 @@ def extrairboletos(objeto, linha):
                                         if hasattr(mensagemerro, 'text'):
                                             if mensagemerro.text != '':
                                                 dadosiptu = [codigocliente, linha[NrIPTU], '', '', '', '', '', mensagemerro.text]
-                                                # site.fecharsite()
+
                 if mensagemerro is None:
-                    site.delay = 2
-                    mensagemguia = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_M1')
-                    # valortotal = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_Valor1')
-                    site.delay = 10
+                    if guias is None:
+                        site.delay = 2
+                        mensagemguia = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_M1')
+                        site.delay = 10
+
                     if mensagemguia is None:
-                        # guia = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_Guia1')
-                        guias = site.verificarobjetoexiste('CSS_SELECTOR', '[title="Clique aqui para visualizar / imprimir esta guia."]', itemunico=False)
+                        if guias is None:
+                            guias = site.verificarobjetoexiste('CSS_SELECTOR', '[title="Clique aqui para visualizar / imprimir esta guia."]', itemunico=False)
                         if guias is not None:
-                            for guia in guias:
+                            guia = guias[nrguia]
+                            if guia is not None:
                                 if getattr(sys, 'frozen', False):
                                     guia.click()
                                 else:
@@ -183,8 +195,6 @@ def extrairboletos(objeto, linha):
                                                     site.navegador.execute_script("arguments[0].click()", confirmar)
 
                                                 if site.navegador.current_url == senha.telaboletoIPTU:
-                                                    # imprimir = site.verificarobjetoexiste('LINK_TEXT', 'aqui',
-                                                    #                                       iraoobjeto=True)
                                                     linkdownload = site.verificarobjetoexiste('LINK_TEXT', 'aqui')
                                                     if linkdownload is not None:
                                                         if botaogerar is not None:
@@ -203,6 +213,20 @@ def extrairboletos(objeto, linha):
                                                         objeto.visual.mudartexto('labelstatus', 'Salvando Boleto...')
                                                         caminhodestino = aux.to_raw(caminhodestino)
                                                         aux.adicionarcabecalhopdf(baixado, caminhodestino, codigocliente)
+                                if nrguia == 0 and len(guias):
+                                    for indice, guia in enumerate(guias):
+                                        dadosiptutemp, dftemp = extrairboletos(objeto, linha, indice, site)
+                                        if dadosiptutemp is not None:
+                                            if dadosiptu is None:
+                                                dadosiptu = dadosiptutemp
+                                            else:
+                                                dadosiptu.append(dadosiptutemp)
+
+                                        if dftemp is not None:
+                                            if df is None:
+                                                df = dftemp
+                                            else:
+                                                df.append(dftemp)
 
                     else:
                         guiaexercicio = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_Guia1')
@@ -229,32 +253,35 @@ def extrairboletos(objeto, linha):
                             for valortela in valoresimpostotela:
 
                                 if valortela is not None:
-                                    valor = valortela.text
-                                    valor = valor.replace('.', '')
-                                    valor = valor.replace(',', '.')
+                                    if len(valortela.text) > 0:
+                                        valor = valortela.text
+                                        valor = valor.replace('.', '')
+                                        valor = valor.replace(',', '.')
+                                    else:
+                                        valor = 0
                                 else:
                                     valor = 0
 
-                                # if valoresimpostotela is None or float(valor) == 0:
                                 if float(valor) == 0:
                                     dadosiptu.append([codigocliente, linha[NrIPTU], guiaexercicio, '0', '0,00', contribuinte, endereco, 'Sem Guia (Provável Isento)'])
                                 else:
                                     dadosiptu.append([codigocliente, linha[NrIPTU], guiaexercicio, '0', valor, contribuinte, endereco, 'Verificar (Extrair Manualmente)'])
 
-        if os.path.isfile(caminhodestino) and salvardadospdf:
-            listacodigo = []
-            listatipopag = []
-            listaarquivo = []
-            df = aux.extrairtextopdf(caminhodestino)
-            total_rows = df[df.columns[0]].count()
-            for linhatotais in range(total_rows):
-                listacodigo.append("'" + codigocliente + "'")
-                listatipopag.append("'PARCELADO'")
-                listaarquivo.append("'" + os.path.basename(caminhodestino) + "'")
+        if df is None or len(dadosiptu) == 0:
+            if os.path.isfile(caminhodestino) and salvardadospdf:
+                listacodigo = []
+                listatipopag = []
+                listaarquivo = []
+                df = aux.extrairtextopdf(caminhodestino)
+                total_rows = df[df.columns[0]].count()
+                for linhatotais in range(total_rows):
+                    listacodigo.append("'" + codigocliente + "'")
+                    listatipopag.append("'PARCELADO'")
+                    listaarquivo.append("'" + os.path.basename(caminhodestino) + "'")
 
-            df.insert(loc=0, column='Codigo', value=listacodigo)
-            df.insert(loc=4, column='TpoPagto', value=listatipopag)
-            df.insert(loc=5, column='Arquivo', value=listaarquivo)
+                df.insert(loc=0, column='Codigo', value=listacodigo)
+                df.insert(loc=4, column='TpoPagto', value=listatipopag)
+                df.insert(loc=5, column='Arquivo', value=listaarquivo)
 
             # objeto.bd.adicionardf('Codigos IPTUs', df, 7)
         if site is not None:
@@ -268,6 +295,7 @@ def extrairboletos(objeto, linha):
     finally:
         if site is not None:
             site.fecharsite()
+
 
 
 def extrairnadaconsta(objeto, linha):
@@ -491,3 +519,4 @@ def extraircertidaonegativa(objeto, linha):
     finally:
         if site is not None:
             site.fecharsite()
+

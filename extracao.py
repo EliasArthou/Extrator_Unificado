@@ -435,41 +435,41 @@ class Extrator:
         : param visual: janela a ser manipulada.
         """
 
-        try:
+        # try:
 
-            self.listachaves = ['Código Cliente', 'Inscrição', 'Guia do Exercício', 'Nr Guia', 'Valor', 'Contribuinte', 'Endereço', 'Status']
-            self.listaexcel = []
-            # site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
+        self.listachaves = ['Código Cliente', 'Inscrição', 'Guia do Exercício', 'Nr Guia', 'Valor', 'Contribuinte', 'Endereço', 'Status']
+        self.listaexcel = []
+        # site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
 
-            for indice, linha in enumerate(self.resultado):
-                codigocliente = linha[Biptu.Codigo]
-                # ===================================== Parte Gráfica =======================================================
-                self.visual.mudartexto('labelcodigocliente', 'Código Cliente: ' + codigocliente)
-                iptu = str(linha[Biptu.NrIPTU])
-                iptu = str(iptu.strip()).zfill(8)
-                iptu = '{}.{}{}{}.{}{}{}-{}'.format(*iptu)
-                self.visual.mudartexto('labelinscricao', 'Inscrição Imobiliária: ' + iptu)
+        for indice, linha in enumerate(self.resultado):
+            codigocliente = linha[Biptu.Codigo]
+            # ===================================== Parte Gráfica =======================================================
+            self.visual.mudartexto('labelcodigocliente', 'Código Cliente: ' + codigocliente)
+            iptu = str(linha[Biptu.NrIPTU])
+            iptu = str(iptu.strip()).zfill(8)
+            iptu = '{}.{}{}{}.{}{}{}-{}'.format(*iptu)
+            self.visual.mudartexto('labelinscricao', 'Inscrição Imobiliária: ' + iptu)
 
-                self.visual.mudartexto('labelquantidade', 'Item ' + str(indice + 1) + ' de ' + str(len(self.resultado)) + '...')
-                self.visual.mudartexto('labelstatus', 'Extraindo boleto...')
-                # Atualiza a barra de progresso das transações (Views)
-                self.visual.configurarbarra('barraextracao', len(self.resultado), indice + 1)
-                time.sleep(0.1)
-                # ===================================== Parte Gráfica =======================================================
+            self.visual.mudartexto('labelquantidade', 'Item ' + str(indice + 1) + ' de ' + str(len(self.resultado)) + '...')
+            self.visual.mudartexto('labelstatus', 'Extraindo boleto...')
+            # Atualiza a barra de progresso das transações (Views)
+            self.visual.configurarbarra('barraextracao', len(self.resultado), indice + 1)
+            time.sleep(0.1)
+            # ===================================== Parte Gráfica =======================================================
 
-                dadosiptu, df = Biptu.extrairboletos(self, linha)
-                if df is not None:
-                    self.bd.adicionardf('Codigos IPTUs', df, 7)
+            dadosiptu, df = Biptu.extrairboletos(self, linha)
+            if df is not None:
+                self.bd.adicionardf('Codigos IPTUs', df, 7)
 
-                if len(dadosiptu) > 0:
-                    self.listadados.append(dadosiptu)
-                else:
-                    print('Vazio')
-                # self.listaexcel.append(dict(zip(self.listachaves, dadosiptu)))
+            if len(dadosiptu) > 0:
+                self.listadados.append(dadosiptu)
+            else:
+                print('Vazio')
+            # self.listaexcel.append(dict(zip(self.listachaves, dadosiptu)))
 
-        except Exception as e:
-            # print(f"Erro:{str(e)}")
-            msg.msgbox(str(e), msg.MB_OK, 'Erro')
+        # except Exception as e:
+        #     # print(f"Erro:{str(e)}")
+        #     msg.msgbox(str(e), msg.MB_OK, 'Erro')
 
     def extraircondominio(self):
         self.visual.acertaconfjanela(False)

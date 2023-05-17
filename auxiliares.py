@@ -544,72 +544,6 @@ def timezones_disponiveis():
     return timezones
 
 
-# def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, protegido=False):
-#     """
-#     :param arquivo: arquivo PDF de "entrada".
-#     :param arquivodestino: arquivo PDF de saída (já com o cabeçalho).
-#     :param cabecalho: texto do cabeçalho a ser adicionado.
-#     :return:
-#     """
-#     import pypdf
-#     import io
-#     from reportlab.pdfgen import canvas
-#     from reportlab.lib.pagesizes import letter
-#     from reportlab.pdfbase.ttfonts import TTFont
-#     from reportlab.pdfbase import pdfmetrics
-#
-#     if not (protegido):
-#         packet = io.BytesIO()
-#         pdfmetrics.registerFont(TTFont('Arial', 'arial-bold.ttf'))
-#         can = canvas.Canvas(packet, pagesize=letter)
-#         can.setFont('Arial', 10)
-#         can.drawString(300, 820, cabecalho)
-#         can.save()
-#
-#         # move to the beginning of the StringIO buffer
-#         packet.seek(0)
-#
-#         # create a new PDF with Reportlab
-#         new_pdf = pypdf.PdfReader(packet)
-#         # read your existing PDF
-#         with open(arquivo, 'rb') as p:
-#             existing_pdf = (p.readlines())
-#         arquivopdf = reset_eof_of_pdf_return_stream(existing_pdf)
-#         arquivoacertado = mid(arquivo, 1, len(arquivo) - 4) + "_acertado" + right(arquivo, 4)
-#         if os.path.isfile(arquivoacertado):
-#             os.remove(arquivoacertado)
-#         # write to new pdf
-#         with open(arquivoacertado, 'wb') as f:
-#             f.writelines(arquivopdf)
-#
-#         if os.path.isfile(arquivoacertado) and os.path.isfile(arquivo):
-#             os.remove(arquivo)
-#
-#         renomeararquivo(arquivoacertado, arquivo)
-#
-#         if os.path.isfile(arquivoacertado):
-#             os.remove(arquivoacertado)
-#
-#         existing_pdf = pypdf.PdfReader(arquivo)
-#
-#         output = pypdf.PdfFileWriter()
-#         # add the "watermark" (which is the new pdf) on the existing page
-#         paginas = existing_pdf.getNumPages()
-#         for pagina in range(paginas):
-#             page = existing_pdf.getPage(pagina)
-#             if pagina == 0:
-#                 page.mergePage(new_pdf.getPage(pagina))
-#             output.addPage(page)
-#         # finally, write "output" to a real file
-#         outputStream = open(arquivodestino, "wb")
-#         output.write(outputStream)
-#         outputStream.close()
-#         if os.path.isfile(arquivo):
-#             os.remove(arquivo)
-#     else:
-#         mover_arquivo(arquivo, arquivodestino)
-
-
 def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho):
     import fitz
 
@@ -632,8 +566,10 @@ def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho):
                 for pg in pdf:
                     # Verificar se é a primeira página
                     if pg.number == 0:
+                        # Linha para ignorar as formatações da página e não interferir na escrita
+                        pg.wrap_contents()
                         # Cálculo de meio da página
-                        largura_pagina = pg.mediabox_size.x
+                        largura_pagina = pg.mediabox_size.y
                         # Verifica o tamanho do texto considerando a fonte informada na variável "fonte" no início da função
                         largura_texto = fonte.text_length(cabecalho, 10)
                         posicao_x = (largura_pagina - largura_texto) / 2
