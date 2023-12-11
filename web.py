@@ -42,6 +42,8 @@ class TratarSite:
 
         self.navegador = self.configuraprofilechrome(openpdf=habilitarpdf)
         if self.navegador is not None:
+            # Changing the property of the navigator value for webdriver to undefined
+            self.navegador.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             self.navegador.get(self.url)
             time.sleep(1)
             # Testa se a página carregou (ainda tem que fazer um teste e condição quando ele apresenta um texto de erro de carregamento)
@@ -89,7 +91,8 @@ class TratarSite:
                         'saveToFolder': f"{self.caminhodownload}"
                     }
                 }]
-            }),
+            }
+            ),
             'savefile.default_directory': self.caminhodownload
         }
 
@@ -98,9 +101,14 @@ class TratarSite:
         if aux.caminhoprojeto('Profile') != '':
             # self.options.add_argument(f"user-data-dir={aux.caminhoprojeto('Downloads')+'\\'}" )
             self.options.add_argument("--start-maximized")
+            self.options.add_argument("--disable-infobars")
             self.options.add_argument("--disable-features=ChromeWhatsNewUI")
             # self.options.add_argument("--print-to-pdf="+aux.caminhoprojeto('Downloads'))
             self.options.add_experimental_option('prefs', prefs)
+            # Adding argument to disable the AutomationControlled flag
+            self.options.add_argument("--disable-blink-features=AutomationControlled")
+            self.options.add_experimental_option('excludeSwitches', ["enable-automation"])
+            self.options.add_experimental_option('useAutomationExtension', False)
             if ableprintpreview:
                 self.options.add_argument('--kiosk-printing')
             else:
@@ -347,7 +355,7 @@ class TratarSite:
         captcha_text = solver.solve_and_return_solution(self.caminho)
 
         if len(str(captcha_text)) != 0:
-            captcha = self.verificarobjetoexiste(identificacaocaixa, caixacaptcha)
+            captcha = self.verificarobjetoexiste(identificacaocaixa, caixacaptcha, iraoobjeto=True)
             captcha.send_keys(captcha_text)
             self.verificarobjetoexiste(identicacaobotao, botao, iraoobjeto=True)
 

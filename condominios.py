@@ -483,12 +483,12 @@ def bap(objeto, linha):
                                 time.sleep(1)
 
                                 # Espera o download finalizar e "pega" o arquivo baixado (Espera o download pela página download do chrome)
-                                arquivobaixado = os.path.join(objeto.pastadownload, site.pegaarquivobaixado(tempoesperadownload, 1))
+                                arquivobaixado = os.path.join(site.caminhodownload, site.pegaarquivobaixado(tempoesperadownload, 1))
 
                                 # Verifica se o arquivo baixado de fato existe
                                 if os.path.isfile(arquivobaixado):
                                     # Move o arquivo para o caminho escolhido adicionando o cabeçalho
-                                    aux.adicionarcabecalhopdf(objeto.arquivobaixado, novonomearquivo, aux.left(linha[identificador], 4))
+                                    aux.adicionarcabecalhopdf(arquivobaixado, os.path.join(objeto.pastadownload, novonomearquivo), aux.left(linha[identificador], 4))
                                     # Verifica se o arquivo foi gerado
                                     if os.path.isfile(novonomearquivo):
                                         numboleto += 1

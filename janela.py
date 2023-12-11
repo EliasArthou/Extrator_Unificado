@@ -28,16 +28,15 @@ class App(tk.Tk):
         self.data3 = None
         self.c1 = None
         self.c2 = None
-        # self.c3 = None
-        self.c4 = None
+        self.c3 = None
         self.tipoextracao = ''
         self.tiposervico = ''
         self.somentevalores = None
         self.codigosdebarra = None
-        self.nadaconsta = None
         self.faltantes = True
         self.executar = None
 
+        # Largura da Janela
         w = 500
         # Altura da Janela
         h = 162
@@ -60,7 +59,7 @@ class App(tk.Tk):
         self.cmbtipoextracao = ttk.Combobox(self, textvariable=self.tipoextracao)
         self.cmbtipoextracao['state'] = 'readonly'
         self.cmbtipoextracao['values'] = ['', 'Prefeitura', 'Bombeiros', 'Condomínios']
-        self.cmbtipoextracao.place(x=252, y=1, width=self.winfo_width()-252)
+        self.cmbtipoextracao.place(x=252, y=1, width=self.winfo_width() - 252)
         self.cmbtipoextracao.current(0)
         self.cmbtipoextracao.bind('<<ComboboxSelected>>', self.extracao_changed)
 
@@ -76,7 +75,7 @@ class App(tk.Tk):
 
         # ProgressBar de Quantidade de Transações (Views)
         self.barraextracao = ttk.Progressbar(self, orient=tk.HORIZONTAL, length=200, mode='determinate')
-        self.barraextracao.place(x=(w-300)/2, y=70, width=300)
+        self.barraextracao.place(x=(w - 300) / 2, y=70, width=300)
 
         # Label de quantidade de extrações
         self.labelquantidade = ttk.Label(self, text='', font="Arial 10")
@@ -94,12 +93,8 @@ class App(tk.Tk):
         # Salvar Código de Barras no BD
         self.codigosdebarra = tk.BooleanVar()
 
-        # Extrair Nada Consta
-        self.nadaconsta = tk.BooleanVar()
-
-        # Extrair Nada Consta
+        # Só pega os valores que ainda não foram extraídos
         self.faltantes = tk.BooleanVar(value=True)
-
         self.tipopagamento = tk.IntVar()
         self.tipopagamento.set(2)  # Para a segunda opção ficar marcada
         self.manipularradio(self.tipoextracao.get())
@@ -114,7 +109,7 @@ class App(tk.Tk):
         self.fechar['command'] = self.fechar_clicked
         self.fechar.place(x=self.winfo_width() - 90, y=170)
 
-    def manipularradio(self, tipoextracao, criarradio=True):
+    def manipularradio(self, tipoextracao, criarradio=True, executando=True):
         """
         : param criarradio: se cria ou destrói os "radio buttons".
         : param tipoextracao: ajuda a definir a tela que tem que ser carregada baseada na extração que será executada.
@@ -146,14 +141,20 @@ class App(tk.Tk):
                     self.cotaparcelada = ttk.Radiobutton(self, text='Parcelado', variable=self.tipopagamento, value=2)
                     self.cotaparcelada.place(relx=0.25, y=120)
                     self.tipopagamento.set(2)
-
                 else:
                     self.labelradio.destroy()
                     self.cotaunica.destroy()
                     self.cotaparcelada.destroy()
-                    self.cmbtiposervico.destroy()
-                    self.labelservico.destroy()
-                    # self.c1.destroy()
+                    if executando:
+                        if self.labelservico is not None:
+                            self.labelservico.place_forget()
+                            self.labelservico.destroy()
+                        if self.cmbtiposervico is not None:
+                            self.cmbtiposervico.place_forget()
+                            self.cmbtiposervico.destroy()
+
+                    self.labelservico = None
+                    self.cmbtiposervico = None
 
             case 'Prefeitura':
                 if criarradio:
@@ -172,12 +173,10 @@ class App(tk.Tk):
                     self.c2 = tk.Checkbutton(self, text='Subir Código de Barras', variable=self.codigosdebarra, onvalue=True, offvalue=False, font="Arial 10")
                     self.c2.place(relx=0.30, y=142)
                     self.tipopagamento.set(2)
-                    # "Checkbutton" nada consta
-                    # self.c3 = tk.Checkbutton(self, text='Nada Consta', variable=self.nadaconsta, onvalue=True, offvalue=False, font="Arial 10")
-                    # self.c3.place(relx=0.74, y=142)
                     # "Checkbutton" de lista completa ou somente faltantes
-                    self.c4 = tk.Checkbutton(self, text='Somente Faltantes?', variable=self.faltantes, onvalue=True, offvalue=False, font="Arial 10")
-                    self.c4.place(relx=0.65, y=142)
+                    self.c3 = tk.Checkbutton(self, text='Somente Faltantes?', variable=self.faltantes, onvalue=True, offvalue=False, font="Arial 10")
+                    self.c3.place(relx=0.65, y=142)
+
                     # Cria a combobox pra selecionar o serviço da prefeitura
                     self.tiposervico = tk.StringVar()
                     self.labelservico = ttk.Label(self, text='Serviço:')
@@ -187,28 +186,44 @@ class App(tk.Tk):
                     self.cmbtiposervico['values'] = ['IPTU', 'Nada Consta', 'Certidão Negativa']
                     self.cmbtiposervico.place(relx=0.70, y=118, width=120)
                     self.cmbtiposervico.current(0)
-                    # self.cmbtiposervico.bind('<<ComboboxSelected>>', self.servico_changed)
+                    self.cmbtiposervico.bind('<<ComboboxSelected>>', self.servico_changed)
+                    if self.cmbtiposervico.get() == 'Nada Consta':
+                        self.faltantes.set(False)
 
                 else:
                     self.labelradio.destroy()
                     self.cotaunica.destroy()
-                    self.labelservico.destroy()
-                    self.cmbtiposervico.destroy()
+
+                    if executando:
+                        if self.labelservico is not None:
+                            self.labelservico.place_forget()
+                            self.labelservico.destroy()
+
+                        if self.cmbtiposervico is not None:
+                            self.cmbtiposervico.place_forget()
+                            self.cmbtiposervico.destroy()
+
+                        self.cmbtiposervico = None
+                        self.labelservico = None
+
                     self.data1.destroy()
                     self.data2.destroy()
                     self.data3.destroy()
                     self.c1.destroy()
                     self.c2.destroy()
-                    # self.c3.destroy()
-                    self.c4.destroy()
+                    self.c3.destroy()
 
             case _:
                 if self.labelradio is not None:
                     self.labelradio.destroy()
-                if self.labelservico is not None:
-                    self.labelservico.destroy()
-                if self.cmbtiposervico is not None:
-                    self.cmbtiposervico.destroy()
+                if executando:
+                    if self.labelservico is not None:
+                        self.labelservico.destroy()
+                    if self.cmbtiposervico is not None:
+                        self.cmbtiposervico.destroy()
+                    self.labelservico = None
+                    self.cmbtiposervico = None
+
                 if self.cotaunica is not None:
                     self.cotaunica.destroy()
                 if self.data1 is not None:
@@ -225,10 +240,8 @@ class App(tk.Tk):
                     self.c1.destroy()
                 if self.c2 is not None:
                     self.c2.destroy()
-                # if self.c3 is not None:
-                #     self.c3.destroy()
-                if self.c4 is not None:
-                    self.c4.destroy()
+                if self.c3 is not None:
+                    self.c3.destroy()
 
         self.atualizatela()
 
@@ -240,28 +253,33 @@ class App(tk.Tk):
 
     def servico_changed(self, event):
         """ Evento de mudança do combobox """
-        # self.manipularradio('', True)
+        match self.cmbtiposervico.get():
+            case 'IPTU':
+                self.manipularradio(self.tipoextracao.get(), True)
+
+            case _:
+                self.manipularradio(self.tipoextracao.get(), False, False)
+
         # self.manipularradio(self.tipoextracao.get(), True)
 
     def executar_clicked(self):
         """
         Ação do botão
         """
-        self.manipularradio(self.tipoextracao.get(), False)
+        self.manipularradio(self.tipoextracao.get(), False, False)
+        if self.labelservico is not None:
+            self.labelservico.place_forget()
+            self.labelservico.visible = False
+            self.labelservico.destroy()
+        if self.cmbtiposervico is not None:
+            self.cmbtiposervico.place_forget()
+            self.labelservico.visible = False
+            self.cmbtiposervico.destroy()
+        self.cmbtiposervico = None
+        self.labelservico = None
+        self.atualizatela()
         extrator = extracao.Extrator(self)
         extrator.controlaextracao()
-        """
-        self.manipularradio(self.tipoextracao.get(), False)
-        match self.tipoextracao.get():
-            case 'Bombeiros':
-                extrairboletosbombeiro(self)
-
-            case 'IPTU':
-                extrairboletosiptu(self)
-
-            case _:
-                msg.msgbox(f'Opção Inválida!', msg.MB_OK, 'Tempo Decorrido')
-        """
 
     def fechar_clicked(self):
         """

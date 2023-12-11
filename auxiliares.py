@@ -192,12 +192,13 @@ def escreverlistaexcelog(caminho, lista):
     : param lista: lista a ser adicionada no arquivo do caminho dado.
     """
 
-
     df = pd.DataFrame(lista)
 
     writer = pd.ExcelWriter(caminho, engine='xlsxwriter')
     df.to_excel(writer, sheet_name='Lista', index=False)
-    writer.save()
+    worksheet = writer.sheets['Lista']
+    worksheet.autofit()
+    writer._save()
 
 
 def acertardataatual():
@@ -420,11 +421,12 @@ def reset_eof_of_pdf_return_stream(pdf_stream_in: list):
     return pdf_stream_in[:actual_line]
 
 
-def extrairtextopdf(caminho):
+def extrairtextopdf(caminho, tipos):
     import PyPDF2
     import re
 
     texto = ''
+    df = None
 
     with open(caminho, 'rb') as arquivo:
         reader = PyPDF2.PdfReader(arquivo)
@@ -432,83 +434,110 @@ def extrairtextopdf(caminho):
             p = reader.pages[pagina]
             texto += p.extract_text()
 
-    # reader = pypdf.PdfReader(caminho)
-    # for pagina in range(reader.getNumPages()):
-    #     p = reader.getPage(pagina)
-    #     texto += p.extractText()
+    match tipos.upper():
+        case 'BOLETOS':
+            lista = re.findall(r'([\d]{1}.[\d]{3}.[\d]{3}-[\d]{1})\n[\d]{2}', texto)
+            listalimpa = []
+            for indice, linha in enumerate(lista):
+                if indice % 2:
+                    linha = linha.replace('.', '')
+                    linha = linha.replace('-', '')
+                    linha = linha.replace('\n', '')
+                    listalimpa.append("'" + linha + "'")
+            df = pd.DataFrame(listalimpa, columns=['Inscricao'])
 
-    lista = re.findall(r'([\d]{1}.[\d]{3}.[\d]{3}-[\d]{1})\n[\d]{2}', texto)
-    listalimpa = []
-    for indice, linha in enumerate(lista):
-        if indice % 2:
-            linha = linha.replace('.', '')
-            linha = linha.replace('-', '')
-            linha = linha.replace('\n', '')
-            listalimpa.append("'" + linha + "'")
-    df = pd.DataFrame(listalimpa, columns=['Inscricao'])
+            lista = re.findall(r'COMPETÊNCIA\n([\d]{4})\n[\d]{2}', texto)
+            listalimpa = []
+            for indice, linha in enumerate(lista):
+                if indice % 2:
+                    listalimpa.append("'" + linha.replace('\n', '') + "'")
+            df['Competencia'] = listalimpa
 
-    lista = re.findall(r'COMPETÊNCIA\n([\d]{4})\n[\d]{2}', texto)
-    listalimpa = []
-    for indice, linha in enumerate(lista):
-        if indice % 2:
-            listalimpa.append("'" + linha.replace('\n', '') + "'")
-    df['Competencia'] = listalimpa
-    # df['Competencia'] = lista
+            lista = re.findall(r'([\d]{2}/[\d]{2}/[\d]{4})\n[\d]{2}', texto)
+            listalimpa = []
+            for indice, linha in enumerate(lista):
+                if indice % 2:
+                    listalimpa.append("'" + linha.replace('\n', '') + "'")
+            df['Vencimentos'] = listalimpa
 
-    lista = re.findall(r'([\d]{2}/[\d]{2}/[\d]{4})\n[\d]{2}', texto)
-    listalimpa = []
-    for indice, linha in enumerate(lista):
-        if indice % 2:
-            listalimpa.append("'" + linha.replace('\n', '') + "'")
-    df['Vencimentos'] = listalimpa
-    # df['Vencimentos'] = lista
+            lista = re.findall(r'CONTRIBUINTE\n([\D]*)[\d]{2}.', texto)
+            listalimpa = []
+            for indice, linha in enumerate(lista):
+                if indice % 2:
+                    listalimpa.append("'" + linha.replace('\n', '') + "'")
+            df['Contribuinte'] = listalimpa
 
-    lista = re.findall(r'CONTRIBUINTE\n([\D]*)[\d]{2}.', texto)
-    listalimpa = []
-    for indice, linha in enumerate(lista):
-        if indice % 2:
-            listalimpa.append("'" + linha.replace('\n', '') + "'")
-    df['Contribuinte'] = listalimpa
-    # df['Contribuinte'] = lista
+            # lista = re.findall(r'AUTENTICAÇÃO AUTOMÁTICA[\D]PARA USO DO BANCO[\D]\n([\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d])[\D]', texto)
+            lista = re.findall(r'AUTENTICAÇÃO AUTOMÁTICA[\D]PARA USO DO BANCO[\D]\n([\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d])\n', texto)
+            listalimpa = []
+            for indice, linha in enumerate(lista):
+                linha = linha.replace('.', '')
+                linha = linha.replace(' ', '')
+                listalimpa.append("'" + linha + "'")
+            df['Codigo de Barras'] = listalimpa
 
-    lista = re.findall(r'AUTENTICAÇÃO AUTOMÁTICA[\D]PARA USO DO BANCO[\D]\n([\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d])[\D]', texto)
-    # listalimpa = []
-    # for indice, linha in enumerate(lista):
-    #     if indice % 2:
-    #         listalimpa.append(linha.replace('\n', ''))
-    # df['Codigo de Barras'] = listalimpa
-    listalimpa = [f"'{item}'" for item in lista]
-    df['Codigo de Barras'] = listalimpa
+            lista = re.findall(r'GUIA/COTA\n([\d]{2}/[\d]{2})', texto)
+            listalimpa = []
+            for indice, linha in enumerate(lista):
+                if indice % 2:
+                    listalimpa.append("'" + linha.replace('\n', '') + "'")
+            df['Guia'] = listalimpa
 
-    lista = re.findall(r'GUIA/COTA\n([\d]{2}/[\d]{2})', texto)
-    listalimpa = []
-    for indice, linha in enumerate(lista):
-        if indice % 2:
-            listalimpa.append("'" + linha.replace('\n', '') + "'")
-    df['Guia'] = listalimpa
+            lista = re.findall(r'VALOR TOTAL\n(\d+(?:\.\d{3})*,\d{2})', texto)
+            listalimpa = []
+            for indice, linha in enumerate(lista):
+                if indice % 2:
+                    listalimpa.append("'" + linha + "'")
+            df['Valor Total'] = listalimpa
 
-    # lista = re.findall(r'VALOR TOTAL\n([\d]*,[\d]{2})\n[\d]{2}.', texto)
-    lista = re.findall(r'VALOR TOTAL\n(\d+(?:\.\d{3})*,\d{2})', texto)
-    listalimpa = []
-    for indice, linha in enumerate(lista):
-        if indice % 2:
-            listalimpa.append("'" + linha + "'")
-    df['Valor Total'] = listalimpa
-    # df['Valor Total'] = lista
+            lista = re.findall(r'GUIA/COTA\n[\d]{2}/([\d]{2})', texto)
+            listalimpa = []
+            for indice, linha in enumerate(lista):
+                if indice % 2:
+                    listalimpa.append("'" + str(int(linha)) + "'")
+            df['Parcela'] = listalimpa
 
-    lista = re.findall(r'GUIA/COTA\n[\d]{2}/([\d]{2})', texto)
-    listalimpa = []
-    for indice, linha in enumerate(lista):
-        if indice % 2:
-            listalimpa.append("'" + str(int(linha)) + "'")
-    df['Parcela'] = listalimpa
-    # df['Parcela'] = lista
+        case 'NADA CONSTA':
+            lista = re.findall(r'INSCRIÇÃO: ([\d]{1}.[\d]{3}.[\d]{3}-[\d]{1})', texto)
+            listalimpa = [f"'{item.strip()}'" for item in lista]
+            df = pd.DataFrame(listalimpa, columns=['Inscricao'])
+
+            lista = re.findall(r'COTA.*?- IPTU ([\d]{4})', texto)
+
+            listalimpa = [f"'{item}'" for item in lista]
+            df['Competencia'] = listalimpa
+
+            lista = re.findall(r'VENCIMENTO: ([\d]{2}/[\d]{2}/[\d]{4})', texto)
+            listalimpa = [f"'{item.strip()}'" for item in lista]
+            df['Vencimentos'] = listalimpa
+
+            lista = re.search(r'[\d].[\d]{3}.[\d]{3}-[\d] [\d]{2}([\d\D]*)\n', texto)
+            df['Contribuinte'] = "'" + lista.group(1) + "'"
+
+            lista = re.findall(r'([\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d])', texto)
+            if not lista:
+                return None
+
+            listalimpa = []
+            for indice, linha in enumerate(lista):
+                linha = linha.replace('.', '')
+                linha = linha.replace(' ', '')
+                listalimpa.append("'" + linha + "'")
+            df['Codigo de Barras'] = listalimpa
+
+            lista = re.findall(r'COTA ([\d]{2}|ÚNICA) - IPTU ', texto)
+            listalimpa = [f"'{item.strip()}'" for item in lista]
+            df['Guia'] = listalimpa
+
+            lista = re.findall(r'VALOR.*R\$: (\d+(?:\.\d+)?,\d+)', texto)
+
+            listalimpa = [f"'{item}'" for item in lista]
+            df['Valor Total'] = listalimpa
 
     return df
 
 
 def hora(timezone, pedaco=''):
-
     import datetime
 
     url = 'http://worldtimeapi.org/api/timezone/' + timezone
@@ -595,18 +624,18 @@ def removersenhapdf(arquivobloqueado):
         caminho, extensao = os.path.splitext(arquivobloqueado)
         # Abre o arquivo e cria uma cópia sem senha
         with pikepdf.open(arquivobloqueado) as pdf:
-            pdf.save(caminho+'Desbloqueado'+extensao)
+            pdf.save(caminho + 'Desbloqueado' + extensao)
 
         # Verifica se o arquivo desbloqueado foi gerado
-        if os.path.isfile(caminho+'Desbloqueado'+extensao):
-            with pikepdf.open(caminho+'Desbloqueado'+extensao) as pdf:
+        if os.path.isfile(caminho + 'Desbloqueado' + extensao):
+            with pikepdf.open(caminho + 'Desbloqueado' + extensao) as pdf:
                 desbloqueado = not pdf.is_encrypted
 
             if desbloqueado:
                 os.remove(arquivobloqueado)
-                os.rename(caminho+'Desbloqueado'+extensao, arquivobloqueado)
+                os.rename(caminho + 'Desbloqueado' + extensao, arquivobloqueado)
             else:
-                os.remove(caminho+'Desbloqueado'+extensao)
+                os.remove(caminho + 'Desbloqueado' + extensao)
 
     return desbloqueado
 
@@ -705,3 +734,59 @@ def enviarSMS(mensagem):
         print(str(e))
 
         return False
+
+
+def listartodosarquivoscaminho(caminho, extensao=''):
+    arquivos = []
+
+    # Percorre recursivamente todas as pastas e subpastas do diretório especificado
+    for root, dirs, files in os.walk(caminho):
+        # Para cada arquivo encontrado, verifica se é um arquivo PDF e adiciona à lista
+        for file in files:
+            if file.endswith(extensao) or len(extensao) == 0:
+                arquivos.append(os.path.join(root, file))
+
+    if arquivos:
+        return arquivos
+    else:
+        return None
+
+
+def buscar_item(lista, item):
+    item_norm = os.path.normpath(item)
+    for sublista in lista:
+        if item_norm in sublista:
+            try:
+                index = sublista.index(item_norm)
+                return sublista[index - 1]
+            except IndexError:
+                return ''
+    return ''
+
+
+def extrair_arquivos(caminho_origem, temp_dir):
+    # extrai todos os arquivos zip do diretório para uma pasta temporária
+
+    import zipfile
+    import shutil
+
+    listazips = []
+    arquivo_destino = ''
+    for root, dirs, files in os.walk(caminho_origem):
+        for filename in files:
+            if filename.endswith('.zip'):
+                caminho = os.path.join(root, filename)
+                with zipfile.ZipFile(caminho, 'r') as zip_file:
+                    for arquivo_nome in zip_file.namelist():
+                        if arquivo_nome.lower().endswith('.pdf'):
+                            with zip_file.open(arquivo_nome) as arquivo_zip:
+                                caminhoarquivo = os.path.join(temp_dir, os.path.basename(arquivo_nome))
+                                with open(caminhoarquivo, 'wb') as arquivo_destino:
+                                    shutil.copyfileobj(arquivo_zip, arquivo_destino)
+                                if os.path.isfile(caminhoarquivo):
+                                    listazips.append([caminho, caminhoarquivo])
+
+    if listazips:
+        return listazips
+    else:
+        return None
