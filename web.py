@@ -1,4 +1,3 @@
-
 from selenium import webdriver
 import io
 from PIL import Image
@@ -16,6 +15,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.support.ui import Select
 import time
 
 
@@ -74,6 +74,8 @@ class TratarSite:
             'download.directory_upgrade': True,
             'download.prompt_for_download': False,  # To auto download the file
             'plugins.always_open_pdf_externally': not openpdf,  # It will not show PDF directly in chrome
+            "credentials_enable_service": False,  # service to save password
+            "profile.password_manager_enabled": False,  # turn off password manager
             'printing.print_preview_sticky_settings.appState': json.dumps({
                 'recentDestinations': [{
                     'id': 'Save as PDF',
@@ -125,65 +127,64 @@ class TratarSite:
 
         return webdriver.Chrome(options=self.options, service=chrome_service)
 
-    def verificarobjetoexiste(self, identificador, endereco, valorselecao='', itemunico=True, iraoobjeto=False, sotestar=False):
+    def verificarobjetoexiste(self, identificador, endereco, valorselecao='', itemunico=True, iraoobjeto=False, sotestar=False, buscar_em_iframes=False):
         """
-        :param sotestar: retornar se o objeto existe ou não (retorno se torna um booleano).
-        :param iraoobjeto: se simula o mouse em cima do objeto ou não.
-        :param identificador: como será identificado, por nome, por nome de classe, etc.
-        :param endereco: nome do objeto no site (lembrando que o nome é segundo o parâmetro anterior, se for definido ID no parâmetro anterior,
-                         nesse tem que vir o ID do objeto do site, por exemplo.
-        :param valorselecao: caso se um combobox passar o valor de seleção desejado que ele mesmo seleciona o dado nesse parâmetro.
-        :param itemunico: caso seja uma coleção de objetos que queira selecionar (todos o do nome de classe x), colocar False, padrão será item único.
-        :return: vai retornar o objeto do site para ser trabalhado já verificando se o mesmo existe, caso não encontre retorna None
+         :param sotestar: retornar se o objeto existe ou não (retorno se torna um booleano).
+         :param iraoobjeto: se simula o mouse em cima do objeto ou não.
+         :param identificador: como será identificado, por nome, por nome de classe, etc.
+         :param endereco: nome do objeto no site (lembrando que o nome é segundo o parâmetro anterior, se for definido ID no parâmetro anterior,
+                          nesse tem que vir o ID do objeto do site, por exemplo.
+         :param valorselecao: caso se um combobox passar o valor de seleção desejado que ele mesmo seleciona o dado nesse parâmetro.
+         :param itemunico: caso seja uma coleção de objetos que queira selecionar (todos o do nome de classe x), colocar False, padrão será item único.
+         :param buscar_em_iframes: buscar o elemento em todos os iframes se necessário.
+         :return: vai retornar o objeto do site para ser trabalhado já verificando se o mesmo existe, caso não encontre retorna None
         """
-
-        from selenium.webdriver.support.ui import Select
 
         if self.navegador is not None:
+            original_window = self.navegador.current_window_handle
             try:
-                if itemunico:
-                    if len(valorselecao) == 0:
-                        elemento = WebDriverWait(self.navegador, self.delay).until(EC.visibility_of_element_located((getattr(By, identificador), endereco)))
-                        # elemento = self.navegador.find_element(getattr(By, identificador), endereco)
+                return self.buscar_elemento(identificador, endereco, valorselecao, itemunico, iraoobjeto, sotestar)
+            except (NoSuchElementException, TimeoutException):
+                if buscar_em_iframes:
+                    iframes = self.verificarobjetoexiste('TAG_NAME', 'iframe', itemunico=False)
+                    # iframes = self.navegador.find_elements_by_tag_name("iframe")
+                    for iframe in iframes:
+                        try:
+                            self.navegador.switch_to.frame(iframe)
+                            elemento = self.buscar_elemento(identificador, endereco, valorselecao, itemunico, iraoobjeto, sotestar)
+                            if elemento:
+                                return elemento
+                        except (NoSuchElementException, TimeoutException):
+                            pass
+                        self.navegador.switch_to.window(original_window)
+                return False if sotestar else None
 
-                    else:
-                        elemento = WebDriverWait(self.navegador, self.delay).until(EC.visibility_of_element_located((getattr(By, identificador), endereco)))
-                        # elemento = Select(self.navegador.find_element(getattr(By, identificador), endereco))
-                        select = Select(elemento)
-                        select.select_by_visible_text(valorselecao)
-                        # elemento.select_by_value(valorselecao)
-                else:
-                    if len(valorselecao) == 0:
-                        elemento = self.navegador.find_elements(getattr(By, identificador), endereco)
-                    else:
-                        elemento = Select(self.navegador.find_elements(getattr(By, identificador), endereco))
-                        select = Select(elemento)
-                        select.select_by_visible_text(valorselecao)
-                        # elemento.select_by_value(valorselecao)
+    def buscar_elemento(self, identificador, endereco, valorselecao, itemunico, iraoobjeto, sotestar):
+        """
+        Função auxiliar para buscar o elemento.
+        """
+        if itemunico:
+            if len(valorselecao) == 0:
+                elemento = WebDriverWait(self.navegador, self.delay).until(EC.visibility_of_element_located((getattr(By, identificador), endereco)))
+            else:
+                elemento = WebDriverWait(self.navegador, self.delay).until(EC.visibility_of_element_located((getattr(By, identificador), endereco)))
+                select = Select(elemento)
+                select.select_by_visible_text(valorselecao)
+        else:
+            if len(valorselecao) == 0:
+                elemento = self.navegador.find_elements(getattr(By, identificador), endereco)
+            else:
+                elemento = Select(self.navegador.find_elements(getattr(By, identificador), endereco))
+                select = Select(elemento)
+                select.select_by_visible_text(valorselecao)
 
-                if iraoobjeto and elemento is not None:
-                    self.navegador.execute_script("arguments[0].click()", elemento)
-                    time.sleep(1)
-                    self.trataralerta()
-                    time.sleep(1)
+        if iraoobjeto and elemento is not None:
+            self.navegador.execute_script("arguments[0].click()", elemento)
+            time.sleep(1)
+            self.trataralerta()
+            time.sleep(1)
 
-                if not sotestar:
-                    return elemento
-                else:
-                    return True
-
-            except NoSuchElementException:
-                if not sotestar:
-                    return None
-                else:
-                    return False
-
-            except TimeoutException:
-                # messagebox.msgbox('Erro de carregamento objeto!', messagebox.MB_OK, 'Erro Carregamento')
-                if not sotestar:
-                    return None
-                else:
-                    return False
+        return True if sotestar else elemento
 
     def descerrolagem(self):
         """
@@ -453,13 +454,34 @@ class TratarSite:
 
         return tabela
 
+    @staticmethod
+    def obter_arquivos_atuais(diretorio):
+        """Obtém uma lista dos arquivos no diretório especificado."""
+        return set(os.listdir(diretorio))
+
+    @staticmethod
+    def esperar_novo_download(diretorio, arquivos_originais, timeout=300):
+        """Espera até que um novo download seja concluído no diretório especificado."""
+        tempo_inicio = time.time()
+        while True:
+            arquivos_atuais = set(os.listdir(diretorio))
+            arquivos_novos = arquivos_atuais - arquivos_originais
+            for arquivo in arquivos_novos:
+                if not arquivo.endswith('.crdownload'):
+                    print(f"Download completo: {arquivo}")
+                    return arquivo
+            if (time.time() - tempo_inicio) > timeout:
+                print("Tempo de espera excedido.")
+                return None
+            time.sleep(1)
+
     def pegaarquivobaixado(self, timeout, quantabas=0, caminhobaixado=''):
         if quantabas > 0:
             while self.num_abas() > quantabas:
                 time.sleep(1)
         quantabas = self.num_abas()
         self.navegador.execute_script('window.open()')
-        time.sleep(1)
+        time.sleep(2)
         if quantabas < self.num_abas():
             # switch to new tab
             self.navegador.switch_to.window(self.navegador.window_handles[-1])
@@ -468,45 +490,62 @@ class TratarSite:
             time.sleep(1)
             # define the endTime
             endTime = time.time() + timeout
-            while True:
-                try:
-                    # get downloaded percentage
-                    downloadPercentage = self.navegador.execute_script(
-                        "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('#progress').value")
-                    # check if downloadPercentage is 100 (otherwise the script will keep waiting)
-                    if downloadPercentage == 100:
-                        time.sleep(1)
-                        # return the file name once the download is completed
-                        return self.navegador.execute_script(
-                            "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('div#content  #file-link').text")
-                    time.sleep(1)
 
-                except BaseException as err:
+            # Aguarda até que algum download seja iniciado
+            max_attempts = 30  # Número máximo de tentativas
+            attempts = 0
+            download_started = False
+
+            while attempts < max_attempts and not download_started:
+                # Verifica se há algum download listado
+                download_items = self.navegador.execute_script(
+                    "return document.querySelector('downloads-manager').shadowRoot.querySelector('iron-list').items;")
+                if download_items:
+                    download_started = True
+                else:
+                    time.sleep(1)  # Espera um segundo antes de verificar novamente
+                    attempts += 1
+
+            if download_started:
+                while True:
                     try:
+                        # get downloaded percentage
+                        downloadPercentage = self.navegador.execute_script(
+                            "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('#progress').value")
+                        # check if downloadPercentage is 100 (otherwise the script will keep waiting)
+                        if downloadPercentage == 100:
+                            time.sleep(1)
+                            # return the file name once the download is completed
+                            return self.navegador.execute_script(
+                                "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('div#content  #file-link').text")
                         time.sleep(1)
-                        arquivo = self.navegador.execute_script(
-                            "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('div#content  #file-link').text")
-                        if len(arquivo) > 0:
-                            return arquivo
-                        else:
-                            pass
 
-                    except Exception as e:
-                        # Obtendo o caminho da pasta de downloads padrão do Chrome
-                        if len(caminhobaixado) > 0:
-                            # Espera o download finalizar
-                            self.esperadownloads(caminhobaixado, timeout, 1)
-                            # Pega o último arquivo baixado da pasta
-                            arquivo = aux.ultimoarquivo(caminhobaixado, 'pdf')
-                            return os.path.basename(arquivo)
+                    except BaseException as err:
+                        try:
+                            time.sleep(1)
+                            arquivo = self.navegador.execute_script(
+                                "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('div#content  #file-link').text")
+                            if len(arquivo) > 0:
+                                return arquivo
+                            else:
+                                pass
 
-                finally:
+                        except Exception as e:
+                            # Obtendo o caminho da pasta de downloads padrão do Chrome
+                            if len(caminhobaixado) > 0:
+                                # Espera o download finalizar
+                                self.esperadownloads(caminhobaixado, timeout, 1)
+                                # Pega o último arquivo baixado da pasta
+                                arquivo = aux.ultimoarquivo(caminhobaixado, 'pdf')
+                                return os.path.basename(arquivo)
+
+                    finally:
+                        time.sleep(1)
+                        if self.num_abas() > 1:
+                            if self.irparaaba(titulo='Downloads'):
+                                if self.navegador.current_url == 'chrome://downloads/':
+                                    self.fecharaba()
+
                     time.sleep(1)
-                    if self.num_abas() > 1:
-                        if self.irparaaba(titulo='Downloads'):
-                            if self.navegador.current_url == 'chrome://downloads/':
-                                self.fecharaba()
-
-                time.sleep(1)
-                if time.time() > endTime:
-                    break
+                    if time.time() > endTime:
+                        break

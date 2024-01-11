@@ -12,6 +12,7 @@ import sensiveis as senha
 import requests
 import pandas as pd
 import win32gui
+import boletos
 
 caminho = ''
 
@@ -573,9 +574,10 @@ def timezones_disponiveis():
     return timezones
 
 
-def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho):
+def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, centralizado=False):
     import fitz
 
+    tempoespera = 0
     # Abre o arquivo PDF que quer adicionar o cabeçalho
     if os.path.isfile(arquivo):
         with fitz.open(arquivo) as pdf:
@@ -601,7 +603,11 @@ def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho):
                         largura_pagina = pg.mediabox_size.y
                         # Verifica o tamanho do texto considerando a fonte informada na variável "fonte" no início da função
                         largura_texto = fonte.text_length(cabecalho, 10)
-                        posicao_x = (largura_pagina - largura_texto) / 2
+                        if not centralizado:
+                            deslocamento_direita = 30
+                        else:
+                            deslocamento_direita = -30
+                        posicao_x = (largura_pagina - largura_texto) / 2 + deslocamento_direita
                         posicao_y = 20
                         # Insere o cabeçalho no meio da página
                         pg.insert_text((posicao_x, posicao_y), cabecalho, fontsize=10, color=(0, 0, 0), fontfile=fonte)
@@ -609,10 +615,21 @@ def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho):
                         break
             # Salvo o arquivo com o cabeçalho
             pdf.save(arquivodestino)
+        while not (os.path.isfile(arquivodestino) or tempoespera <= 30):
+            time.sleep(1)
+            tempoespera += 1
+
+        tempoespera = 0
+
         # Verifica se o arquivo foi salvo
         if os.path.isfile(arquivodestino):
             # Apaga o arquivo original
             os.remove(arquivo)
+
+            # Pega as informações do boleto (linha digitável, vencimento, valor)
+            dadosboleto = boletos.barcodereader(arquivodestino)
+            if dadosboleto is not None:
+                return dadosboleto
 
 
 def removersenhapdf(arquivobloqueado):

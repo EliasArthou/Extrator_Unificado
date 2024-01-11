@@ -12,6 +12,7 @@ import messagebox as msg
 import sys
 import condominios
 import Biptu
+import pandas as pd
 
 
 class Extrator:
@@ -483,6 +484,7 @@ class Extrator:
         #     msg.msgbox(str(e), msg.MB_OK, 'Erro')
 
     def extraircondominio(self):
+        listaboletos = []
         self.visual.acertaconfjanela(False)
 
         self.listachaves = ['Código', 'Login', 'Senha', 'Administradora', 'Condomínio', 'Unidade', 'Resposta', 'Check de Arquivo', 'CheckErro', 'Nome Função', 'Problema Login']
@@ -502,15 +504,31 @@ class Extrator:
             if len(linha[condominios.Usuario].strip()) > 0 and len(linha[condominios.Senha].strip()) > 0:
                 multiplas = aux.encontrar_administradora(linha[condominios.Administradora])
                 if multiplas is None:
-                    getattr(condominios, senha.retornaradministradora('nomereal', linha[condominios.Administradora], 'nomereduzido').lower())(self, linha)
+                    listatemp = getattr(condominios, senha.retornaradministradora('nomereal', linha[condominios.Administradora], 'nomereduzido').lower())(self, linha)
+                    if listatemp is not None:
+                        listaboletos = listaboletos + listatemp
+                    # listaboletos.append(getattr(condominios, senha.retornaradministradora('nomereal', linha[condominios.Administradora], 'nomereduzido').lower())(self, linha))
                 else:
-                    getattr(condominios, multiplas['Site'])(self, linha)
+                    listatemp = getattr(condominios, multiplas['Site'])(self, linha)
+                    if listatemp is not None:
+                        listaboletos = listaboletos + listatemp
+                print(listatemp)
+                listatemp = None
+                    # listaboletos.append(getattr(condominios, multiplas['Site'])(self, linha))
+
             else:
                 linha[condominios.Resposta] = 'Usuário e/ou senha não preenchido!'
                 linha[condominios.ProblemaLogin] = True
                 if len(linha[condominios.Resposta]) == 0:
                     linha[condominios.Resposta] = condominios.mensagemerropadrao
                 self.visual.mudartexto('labelstatus', linha[condominios.Resposta])
+
+        if listaboletos is not None:
+            # Convertendo a lista de dicionários em um DataFrame
+            df = pd.DataFrame(listaboletos)
+
+            # Salvando o DataFrame em um arquivo Excel
+            df.to_excel('saida.xlsx', index=False)
 
     def criarlistadicionarios(self):
         # Verifica se tem dados e cabeçalhos nas respectivas linhas e se as mesmas têm a mesma quantidade de colunas

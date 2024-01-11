@@ -5,23 +5,25 @@ import auxiliares as aux
 import datetime
 
 
-def barcodereader(pdf_path, pdffile, cabecalho, arquivozip='', qualidade=300):
+def barcodereader(completepath, qualidade=300):
+    # Mensagem de erro
+    mensagem_erro = "Impossível ler código de barras"
 
-    # try:
+    # Inicialização de variáveis
     tentativas = 3
     barras = []
     valor = 0
     vencimento = ''
+    cabecalho = ['Cliente', 'Código de Barras', 'Tipo Código de Barras', 'Nome do Arquivo', 'Linha Digitável', 'Valor', 'Data Vencimento']
 
-    completepath = os.path.join(pdf_path, pdffile)
-    if len(arquivozip) == 0:
-        completepathuser = os.path.join(pdffile)
-    else:
-        completepathuser = os.path.join(arquivozip, os.path.basename(pdffile))
+    # Função para calcular a quantidade de pixels (não incluída neste código)
+    quantidadepixels = calculate_pixels(completepath, completepath, qualidade)
 
-    quantidadepixels = calculate_pixels(pdffile, pdffile, qualidade)
     if quantidadepixels <= 178956970:
-        caminhpoppler = aux.caminhoprojeto() + r'\poppler-23.01.0\library\bin'
+        # Caminho para a biblioteca Poppler (ajuste conforme necessário)
+        caminhpoppler = aux.caminhoprojeto() + r'\poppler-23.11.0\library\bin'
+
+        # Conversão do PDF em imagens de páginas
         pages = convert_from_path(completepath, qualidade, poppler_path=caminhpoppler)
 
         for pagina in pages:
@@ -29,32 +31,80 @@ def barcodereader(pdf_path, pdffile, cabecalho, arquivozip='', qualidade=300):
             if infocodigobarras:
                 infocodigobarras = list(filter(lambda x: x.type == 'I25', infocodigobarras))
 
-            if infocodigobarras:
-                infocodigobarras = decode(pagina)
                 if infocodigobarras:
-                    infocodigobarras = list(filter(lambda x: x.type == 'I25', infocodigobarras))
-
-                codigobarras = infocodigobarras[0].data.decode('ASCII')
-                linhadigitavel = linha_digitavel(codigobarras)
-                if linhadigitavel:
-                    valor, vencimento = extrai_info_boleto(linhadigitavel)
-                dados = [aux.left(os.path.basename(pdffile), 4), infocodigobarras[0].data.decode('ASCII'), infocodigobarras[0].type, completepathuser.replace('/', '\\'),
-                         linha_digitavel(infocodigobarras[0].data.decode('ASCII')), valor, vencimento]
-                barras = dict(zip(cabecalho, dados))
+                    codigobarras = infocodigobarras[0].data.decode('ASCII')
+                    linhadigitavel = linha_digitavel(codigobarras)
+                    if linhadigitavel:
+                        valor, vencimento = extrai_info_boleto(linhadigitavel)
+                    dados = [aux.left(os.path.basename(completepath), 4), infocodigobarras[0].data.decode('ASCII'), infocodigobarras[0].type, completepath.replace('/', '\\'),
+                             linhadigitavel, valor, vencimento]
+                    barras = dict(zip(cabecalho, dados))
+                    break
 
         if barras:
             return barras
-        elif tentativas > 0:
-            nova_qualidade = qualidade * 2  # aumenta a qualidade em 50%
-            return barcodereader(pdf_path, pdffile, cabecalho, arquivozip, nova_qualidade)
         else:
-            return False
+            dados_erro = [aux.left(os.path.basename(completepath), 4), mensagem_erro, mensagem_erro, completepath.replace('/', '\\'),
+                          mensagem_erro, mensagem_erro, mensagem_erro]
+            return dict(zip(cabecalho, dados_erro))
     else:
-        return False
+        dados_erro = [aux.left(os.path.basename(completepath), 4), mensagem_erro, mensagem_erro, completepath.replace('/', '\\'),
+                      mensagem_erro, mensagem_erro, mensagem_erro]
+        return dict(zip(cabecalho, dados_erro))
 
-    # except Exception as e:
-    #     print(e, pdffile)
-    #     return False
+
+# def barcodereader(pdf_path, pdffile, arquivozip='', qualidade=300):
+#
+#     # try:
+#     tentativas = 3
+#     barras = []
+#     valor = 0
+#     vencimento = ''
+#
+#     cabecalho = ['Cliente', 'Código de Barras', 'Tipo Código de Barras', 'Nome do Arquivo', 'Linha Digitável', 'Valor', 'Data Vencimento']
+#
+#     completepath = os.path.join(pdf_path, pdffile)
+#     if len(arquivozip) == 0:
+#         completepathuser = os.path.join(pdffile)
+#     else:
+#         completepathuser = os.path.join(arquivozip, os.path.basename(pdffile))
+#
+#     quantidadepixels = calculate_pixels(pdffile, pdffile, qualidade)
+#     if quantidadepixels <= 178956970:
+#         caminhpoppler = aux.caminhoprojeto() + r'\poppler-23.11.0\library\bin'
+#         pages = convert_from_path(completepath, qualidade, poppler_path=caminhpoppler)
+#
+#         for pagina in pages:
+#             infocodigobarras = decode(pagina)
+#             if infocodigobarras:
+#                 infocodigobarras = list(filter(lambda x: x.type == 'I25', infocodigobarras))
+#
+#             if infocodigobarras:
+#                 infocodigobarras = decode(pagina)
+#                 if infocodigobarras:
+#                     infocodigobarras = list(filter(lambda x: x.type == 'I25', infocodigobarras))
+#
+#                 codigobarras = infocodigobarras[0].data.decode('ASCII')
+#                 linhadigitavel = linha_digitavel(codigobarras)
+#                 if linhadigitavel:
+#                     valor, vencimento = extrai_info_boleto(linhadigitavel)
+#                 dados = [aux.left(os.path.basename(pdffile), 4), infocodigobarras[0].data.decode('ASCII'), infocodigobarras[0].type, completepathuser.replace('/', '\\'),
+#                          linha_digitavel(infocodigobarras[0].data.decode('ASCII')), valor, vencimento]
+#                 barras = dict(zip(cabecalho, dados))
+#
+#         if barras:
+#             return barras
+#         elif tentativas > 0:
+#             nova_qualidade = qualidade * 2  # aumenta a qualidade em 50%
+#             return barcodereader(pdf_path, pdffile, cabecalho, arquivozip, nova_qualidade)
+#         else:
+#             return False
+#     else:
+#         return False
+#
+#     # except Exception as e:
+#     #     print(e, pdffile)
+#     #     return False
 
 
 def calculate_pixels(pdf_path, pdffile, qualidade=300):
@@ -147,7 +197,7 @@ def listarcodigobarras(visual, caminho, temp_dir, listazips):
                 arquivozip = aux.buscar_item(listazips, boletos)
             else:
                 arquivozip = ''
-            teste = barcodereader(caminho, boletos, cabecalho, arquivozip)
+            teste = barcodereader(os.path.join(caminho, boletos))
             if len(arquivozip) == 0:
                 completepathuser = os.path.join(boletos)
             else:
@@ -213,6 +263,6 @@ def extrai_info_boleto(linha_digitavel):
     # Extrai o valor do boleto a partir da linha digitável
     fator_vencimento = int(linha_digitavel[40:44])
     valor_documento = float(linha_digitavel[46:len(linha_digitavel)]) / 100
-    data_vencimento = (datetime.date(1997, 10, 7) + datetime.timedelta(days=fator_vencimento))
+    data_vencimento = (datetime.date(1997, 10, 7) + datetime.timedelta(days=fator_vencimento)).strftime("%d/%m/%Y")
 
     return valor_documento, data_vencimento

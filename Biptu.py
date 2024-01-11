@@ -6,7 +6,6 @@ import os
 import web
 import auxiliares as aux
 import sensiveis as senha
-import time
 import sys
 import pandas as pd
 from selenium.webdriver.support.ui import Select
