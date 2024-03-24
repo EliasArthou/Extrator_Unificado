@@ -5,6 +5,7 @@ import web
 import re
 import os
 import traceback
+import inspect
 
 identificador = 0
 Usuario = 1
@@ -25,10 +26,13 @@ mensagemerropadrao = 'Deu erro! Tentar novamente!'
 mensagemsemcondominio = "Condomínio não encontrado!"
 
 
-def abrj(objeto, linha):
+def abrj_old(objeto, linha):
+    linha[ProblemaLogin] = False
+    linha[Nomefuncao] = inspect.currentframe().f_code.co_name
     site = None
     listaboletos = []
     try:
+
         # Quebra o bloco e apartamento da informação
         if '/' not in linha[Apartamento]:
             linhabloco = linha[Apartamento] + '/'
@@ -180,12 +184,9 @@ def abrj(objeto, linha):
 
                                                                             # Define o nome (baseado no nr do boleto)
                                                                             if numboleto == 0:
-                                                                                novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '_' + \
-                                                                                                  info.retornaradministradora('nomereal', linha[Administradora], 'nomereduzido') + '.pdf'
+                                                                                novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '.pdf'
                                                                             else:
-                                                                                novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '_' + \
-                                                                                                  info.retornaradministradora('nomereal', linha[Administradora], 'nomereduzido') + '_' \
-                                                                                                  + str(numboleto) + '.pdf'
+                                                                                novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '_' + str(numboleto) + '.pdf'
 
                                                                             # Espera o download finalizar e "pega" o arquivo baixado
                                                                             arquivobaixado = os.path.join(site.caminhodownload, site.pegaarquivobaixado(tempoesperadownload))
@@ -209,7 +210,7 @@ def abrj(objeto, linha):
                                                 # Não existem boletos em aberto para buscar na lista do apartamento dado como entrada
                                                 linha[Resposta] = respostapadrao(-1)
                                     else:
-                                        linha[Resposta] = "Condomínio não encontrado!"
+                                        linha[Resposta] = mensagemsemcondominio
 
                                 if len(linha[Resposta]) == 0:
                                     if not achouapartamento:
@@ -229,7 +230,7 @@ def abrj(objeto, linha):
         linha[CheckErro] = True
 
     finally:
-        linha[Nomefuncao] = __name__
+        linha[Nomefuncao] = inspect.currentframe().f_code.co_name
         if site is not None:
             site.fecharsite()
 
@@ -242,6 +243,8 @@ def apsa(objeto, linha):
     listaboletos = []
 
     try:
+        linha[ProblemaLogin] = False
+        linha[Nomefuncao] = inspect.currentframe().f_code.co_name
         # Variável que vai retornar a quantidade de boletos
         numboleto = 0
         # Prepara o objeto
@@ -366,10 +369,9 @@ def apsa(objeto, linha):
                                                                 time.sleep(1)
                                                                 # Define o novo nome e caminho do arquivo baixado (baseado no nr do boleto)
                                                                 if numboleto == 0:
-                                                                    novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '_' + linha[Administradora] + '.pdf'
+                                                                    novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '.pdf'
                                                                 else:
-                                                                    novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '_' + linha[Administradora] + '_' + str(
-                                                                        numboleto + 1) + '.pdf'
+                                                                    novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '_' + str(numboleto + 1) + '.pdf'
 
                                                                 # Espera o download finalizar e "pega" o arquivo baixado
                                                                 arquivobaixado = os.path.join(site.caminhodownload, site.pegaarquivobaixado(tempoesperadownload))
@@ -425,15 +427,17 @@ def apsa(objeto, linha):
         linha[CheckErro] = True
 
     finally:
-        linha[Nomefuncao] = __name__
+        linha[Nomefuncao] = inspect.currentframe().f_code.co_name
         if site is not None:
             site.fecharsite()
 
 
 def bap(objeto, linha):
     site = None
-    listaboletos =[]
+    listaboletos = []
+    linha[Nomefuncao] = inspect.currentframe().f_code.co_name
     try:
+        linha[ProblemaLogin] = False
         numboleto = 0
         # Prepara o objeto
         site = web.TratarSite(info.retornaradministradora('nomereal', linha[Administradora], 'site'), info.nomeprofilecond)
@@ -483,26 +487,34 @@ def bap(objeto, linha):
                             for i, boleto in enumerate(boletos, start=1):
                                 # Clica no botão de boleto
                                 boleto.click()
-                                # Define que o nome do arquivo ficará
-                                if i == 1:
-                                    novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                                               'nomereduzido') + '.pdf')
+
+                                quantaba = site.num_abas()
+                                if quantaba > 1:
+                                    site.irparaaba(2)
+                                    site.delay = 2
+                                    textoseguro = site.verificarobjetoexiste('CLASS_NAME', 'bp-campanha-texto')
+                                    if textoseguro.text == 'Este seguro não é obrigatório, deseja contratá-lo?':
+                                        site.fecharaba(2)
+                                    site.delay = delay
                                 else:
-                                    novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                                               'nomereduzido') + '_' + str(i) + '.pdf')
-                                time.sleep(1)
+                                    # Define que o nome do arquivo ficará
+                                    if i == 1:
+                                        novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '.pdf')
+                                    else:
+                                        novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + str(i) + '.pdf')
+                                    time.sleep(1)
 
-                                # Espera o download finalizar e "pega" o arquivo baixado (Espera o download pela página download do chrome)
-                                arquivobaixado = os.path.join(site.caminhodownload, site.pegaarquivobaixado(tempoesperadownload, 1))
+                                    # Espera o download finalizar e "pega" o arquivo baixado (Espera o download pela página download do chrome)
+                                    arquivobaixado = os.path.join(site.caminhodownload, site.pegaarquivobaixado(tempoesperadownload, 1))
 
-                                # Verifica se o arquivo baixado de fato existe
-                                if os.path.isfile(arquivobaixado):
-                                    # Move o arquivo para o caminho escolhido adicionando o cabeçalho
-                                    listaboletos.append(aux.adicionarcabecalhopdf(arquivobaixado, novonomearquivo, aux.left(linha[identificador], 4)))
-                                    # Verifica se o arquivo foi gerado
-                                    if os.path.isfile(novonomearquivo):
-                                        numboleto += 1
-                                        time.sleep(1)
+                                    # Verifica se o arquivo baixado de fato existe
+                                    if os.path.isfile(arquivobaixado):
+                                        # Move o arquivo para o caminho escolhido adicionando o cabeçalho
+                                        listaboletos.append(aux.adicionarcabecalhopdf(arquivobaixado, novonomearquivo, aux.left(linha[identificador], 4)))
+                                        # Verifica se o arquivo foi gerado
+                                        if os.path.isfile(novonomearquivo):
+                                            numboleto += 1
+                                            time.sleep(1)
 
                         # Retorna resposta na linha
                         linha[Resposta] = respostapadrao(numboleto)
@@ -521,8 +533,9 @@ def bap(objeto, linha):
         linha[Resposta] = str(e)
         linha[CheckErro] = True
 
+
     finally:
-        linha[Nomefuncao] = __name__
+        linha[Nomefuncao] = inspect.currentframe().f_code.co_name
         if site is not None:
             site.fecharsite()
 
@@ -530,7 +543,9 @@ def bap(objeto, linha):
 def bcf(objeto, linha):
     site = None
     listaboletos = []
+    linha[Nomefuncao] = inspect.currentframe().f_code.co_name
     try:
+        linha[ProblemaLogin] = False
         # Variável que vai retornar a quantidade de boletos
         numboleto = 0
         # Prepara o objeto
@@ -598,10 +613,9 @@ def bcf(objeto, linha):
                                 site.esperadownloads(site.caminhodownload, timeout)
                                 # Define o nome (baseado no nr do boleto)
                                 if numboleto == 0:
-                                    novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '_' + linha[Administradora] + '.pdf'
+                                    novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '.pdf'
                                 else:
-                                    novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '_' + linha[Administradora] + '_' \
-                                                      + str(numboleto) + '.pdf'
+                                    novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + str(numboleto) + '.pdf'
 
                                 # Espera o download finalizar e "pega" o arquivo baixado
                                 arquivobaixado = os.path.join(site.caminhodownload, site.pegaarquivobaixado(tempoesperadownload))
@@ -632,7 +646,7 @@ def bcf(objeto, linha):
         linha[CheckErro] = True
 
     finally:
-        linha[Nomefuncao] = __name__
+        linha[Nomefuncao] = inspect.currentframe().f_code.co_name
         if site is not None:
             site.fecharsite()
 
@@ -641,10 +655,12 @@ def cipa(objeto, linha):
     # Iniciar o trabalho, só copiado de outro
     site = None
     listaboletos = []
+    linha[Nomefuncao] = __name__
     try:
         # Variável que vai retornar a quantidade de boletos
 
         numboleto = 0
+        linha[ProblemaLogin] = False
         achouapartamento = False
         mudoustatus = False
         textoobjetologado = '/html/body/app-root/ion-content/layout/app-layout/div/div[1]/div/div/div/div[2]/user-menu/div/div/div/div'
@@ -697,9 +713,10 @@ def cipa(objeto, linha):
                             site.navegador.execute_script("arguments[0].click()", btnsalvar)
                             site.delay = 5
                             # Verifica se deu erro após apertar no botão para realizar o "LOGIN"
-                            msgerro = site.verificarobjetoexiste('CLASS_NAME', 'cipafacil-alert-message ng-tns-c171-3')
+                            msgerro = site.verificarobjetoexiste('CSS_SELECTOR', 'div.cipafacil-alert-message')
+                            msgerro1 = site.verificarobjetoexiste('ID', "mat-error-2")
                             site.delay = delay
-                            if msgerro is None:
+                            if msgerro is None and msgerro1 is None:
                                 # Operação normal
                                 site.delay = 10
                                 usuariologado = site.verificarobjetoexiste('XPATH', textoobjetologado)
@@ -797,10 +814,14 @@ def cipa(objeto, linha):
                                                                                     site.navegador.execute_script("arguments[0].click()", botaofecharfiltro)
                                                                                     site.delay = 2
                                                                                 # Verifica se tem a mensagem de que não tem boleto disponível
-                                                                                if not site.verificarobjetoexiste('XPATH', "//img[@src='assets/images/boleto/boleto-empty.svg' and @alt='Sem funcionalidade' and contains(@class, 'w-full')]", sotestar=True, buscar_em_iframes=True):
+                                                                                if not site.verificarobjetoexiste('XPATH',
+                                                                                                                  "//img[@src='assets/images/boleto/boleto-empty.svg' and @alt='Sem funcionalidade' and contains(@class, 'w-full')]",
+                                                                                                                  sotestar=True, buscar_em_iframes=True):
                                                                                     site.delay = delay
-                                                                                    if site.verificarobjetoexiste('XPATH', "//img[@src='assets/icons/boletos/download.svg']", sotestar=True, buscar_em_iframes=True):
-                                                                                        boletos = site.verificarobjetoexiste('XPATH', "//img[@src='assets/icons/boletos/download.svg']", buscar_em_iframes=True, itemunico=False)
+                                                                                    if site.verificarobjetoexiste('XPATH', "//img[@src='assets/icons/boletos/download.svg']", sotestar=True,
+                                                                                                                  buscar_em_iframes=True):
+                                                                                        boletos = site.verificarobjetoexiste('XPATH', "//img[@src='assets/icons/boletos/download.svg']",
+                                                                                                                             buscar_em_iframes=True, itemunico=False)
 
                                                                                         for i, boleto in enumerate(boletos, start=1):
                                                                                             # arquivos_originais = site.obter_arquivos_atuais(site.caminhodownload)
@@ -808,25 +829,31 @@ def cipa(objeto, linha):
                                                                                             boleto.click()
                                                                                             time.sleep(1)
                                                                                             while not baixando:
-                                                                                                baixando = site.verificarobjetoexiste('XPATH', "//span[@class='text-sm font-bold' and text()='Baixando...']", sotestar=True) is not None
+                                                                                                baixando = site.verificarobjetoexiste('XPATH',
+                                                                                                                                      "//span[@class='text-sm font-bold' and text()='Baixando...']",
+                                                                                                                                      sotestar=True) is not None
 
                                                                                             if i == 1:
-                                                                                                novonomearquivo = os.path.join(objeto.pastadownload,
-                                                                                                                               aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                                                                                     'nomereduzido') + '.pdf')
+                                                                                                novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '.pdf')
                                                                                             else:
                                                                                                 novonomearquivo = os.path.join(objeto.pastadownload,
-                                                                                                                               aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                                                                                     'nomereduzido') + '_' + str(i) + '.pdf')
+                                                                                                                               aux.left(linha[identificador], 4) + '_' + str(i) + '.pdf')
                                                                                             # arquivobaixado = site.esperar_novo_download(site.caminhodownload, arquivos_originais)
                                                                                             arquivobaixado = os.path.join(site.caminhodownload, site.pegaarquivobaixado(tempoesperadownload, 1))
 
                                                                                             # Verifica se o arquivo baixado de fato existe
                                                                                             if os.path.isfile(arquivobaixado):
-                                                                                                listaboletos.append(aux.adicionarcabecalhopdf(arquivobaixado, novonomearquivo, aux.left(linha[identificador], 4)))
+                                                                                                time.sleep(5)
+                                                                                                listaboletos.append(
+                                                                                                    aux.adicionarcabecalhopdf(arquivobaixado, novonomearquivo, aux.left(linha[identificador], 4)))
                                                                                                 if os.path.isfile(novonomearquivo):
                                                                                                     numboleto += 1
                                                                                                 time.sleep(1)
+
+                                                                                            site.irparaaba(indice=site.num_abas() - 1)
+                                                                                            # boletos = site.verificarobjetoexiste('XPATH', "//img[@src='assets/icons/boletos/download.svg']",
+                                                                                            #                                      buscar_em_iframes=True, itemunico=False)
+
                                                                                     else:
                                                                                         # Não existem boletos em aberto para buscar na lista do apartamento dado como entrada
                                                                                         linha[Resposta] = respostapadrao(-1)
@@ -838,14 +865,24 @@ def cipa(objeto, linha):
                                                                     break
 
                                         else:
-                                            linha[Resposta] = "Condomínio não encontrado!"
+                                            linha[Resposta] = mensagemsemcondominio
 
                                         # Retorna resposta na linha
                                         linha[Resposta] = respostapadrao(numboleto)
                             else:
-                                # Mensagem de erro de Login
-                                linha[Resposta] = msgerro.text
-                                linha[ProblemaLogin] = True
+                                if msgerro:
+                                    # Mensagem de erro de Login
+                                    linha[Resposta] = msgerro.text
+                                    linha[ProblemaLogin] = True
+                                if msgerro1:
+                                    if len(linha[Resposta]) == 0:
+                                        # Mensagem de erro de Login
+                                        linha[Resposta] = msgerro1.text
+                                        linha[ProblemaLogin] = True
+                                    else:
+                                        # Mensagem de erro de Login
+                                        linha[Resposta] = linha[Resposta] + '; ' + msgerro1.text
+                                        linha[ProblemaLogin] = True
             site.fecharsite()
 
         if listaboletos is not None:
@@ -854,9 +891,10 @@ def cipa(objeto, linha):
     except Exception as e:
         linha[Resposta] = str(e)
         linha[CheckErro] = True
-        linha[Nomefuncao] = __name__
+
 
     finally:
+        linha[Nomefuncao] = inspect.currentframe().f_code.co_name
         if site is not None:
             site.fecharsite()
 
@@ -864,7 +902,9 @@ def cipa(objeto, linha):
 def fernandoefernandes(objeto, linha):
     site = None
     listaboletos = []
+    linha[Nomefuncao] = inspect.currentframe().f_code.co_name
     try:
+        linha[ProblemaLogin] = False
         numboleto = 0
         # Prepara o objeto
         site = web.TratarSite(info.retornaradministradora('nomereal', linha[Administradora], 'site'), info.nomeprofilecond)
@@ -924,13 +964,9 @@ def fernandoefernandes(objeto, linha):
                                         boleto.click()
                                         # Define que o nome do arquivo ficará
                                         if i == 1:
-                                            novonomearquivo = os.path.join(objeto.pastadownload,
-                                                                           aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                                 'nomereduzido') + '.pdf')
+                                            novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '.pdf')
                                         else:
-                                            novonomearquivo = os.path.join(objeto.pastadownload,
-                                                                           aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                                 'nomereduzido') + '_' + str(i) + '.pdf')
+                                            novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + str(i) + '.pdf')
                                         time.sleep(1)
 
                                         # Espera o download finalizar e "pega" o arquivo baixado (Espera o download pela página download do chrome)
@@ -972,7 +1008,7 @@ def fernandoefernandes(objeto, linha):
         linha[CheckErro] = True
 
     finally:
-        linha[Nomefuncao] = __name__
+        linha[Nomefuncao] = inspect.currentframe().f_code.co_name
         if site is not None:
             site.fecharsite()
 
@@ -983,6 +1019,8 @@ def ICondo(objeto, linha):
     try:
         # Variável que vai retornar a quantidade de boletos
         numboleto = 0
+        linha[Nomefuncao] = inspect.currentframe().f_code.co_name
+        linha[ProblemaLogin] = False
         atualizacaocadastral = False
         # Retorna o texto do site
         textosite = "https://" + info.retornaradministradora('nomereal', linha[Administradora], 'nomereduzido') + ".icondo.com.br/"
@@ -1075,11 +1113,9 @@ def ICondo(objeto, linha):
                                     time.sleep(1)
 
                                     if i == 1:
-                                        novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                                                   'nomereduzido') + '.pdf')
+                                        novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '.pdf')
                                     else:
-                                        novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                                                   'nomereduzido') + '_' + str(i) + '.pdf')
+                                        novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + str(i) + '.pdf')
                                     arquivos_originais = site.obter_arquivos_atuais(site.caminhodownload)
 
                                     linkimpressao = site.verificarobjetoexiste('LINK_TEXT', 'Imprimir/salvar pdf')
@@ -1120,7 +1156,7 @@ def ICondo(objeto, linha):
         linha[CheckErro] = True
 
     finally:
-        linha[Nomefuncao] = __name__
+        linha[Nomefuncao] = inspect.currentframe().f_code.co_name
         if site is not None:
             site.fecharsite()
 
@@ -1129,6 +1165,8 @@ def imodata(objeto, linha):
     site = None
     listaboletos = []
     try:
+        linha[ProblemaLogin] = False
+        linha[Nomefuncao] = inspect.currentframe().f_code.co_name
         numboleto = 0
         # Prepara o objeto
         site = web.TratarSite(info.retornaradministradora('nomereal', linha[Administradora], 'site'), info.nomeprofilecond)
@@ -1221,13 +1259,9 @@ def imodata(objeto, linha):
 
                                         # Define que o nome do arquivo ficará
                                         if i == 1:
-                                            novonomearquivo = os.path.join(objeto.pastadownload,
-                                                                           aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                                 'nomereduzido') + '.pdf')
+                                            novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '.pdf')
                                         else:
-                                            novonomearquivo = os.path.join(objeto.pastadownload,
-                                                                           aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                                 'nomereduzido') + '_' + str(i) + '.pdf')
+                                            novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + str(i) + '.pdf')
 
                                         time.sleep(2)
                                         # Verifica se o download acabou
@@ -1278,11 +1312,13 @@ def imodata(objeto, linha):
             return listaboletos
 
     except Exception as e:
-        linha[Resposta] = str(e)
+        erro_traceback = traceback.format_exc()
+        linha[Resposta] = str(e) + "\nTraceback completo:\n" + erro_traceback
+        # linha[Resposta] = str(e)
         linha[CheckErro] = True
 
     finally:
-        linha[Nomefuncao] = __name__
+        linha[Nomefuncao] = inspect.currentframe().f_code.co_name
         if site is not None:
             site.fecharsite()
 
@@ -1290,7 +1326,9 @@ def imodata(objeto, linha):
 def livefacilities(objeto, linha):
     site = None
     listaboletos = []
+    linha[Nomefuncao] = inspect.currentframe().f_code.co_name
     try:
+        linha[ProblemaLogin] = False
         numboleto = 0
         match info.retornaradministradora('nomereal', linha[Administradora], 'nomereduzido'):
             case "HFLEX":
@@ -1387,14 +1425,9 @@ def livefacilities(objeto, linha):
                                                 botaoimprimir.click()
                                                 # Define que o nome do arquivo ficará
                                                 if i == 0:
-                                                    novonomearquivo = os.path.join(objeto.pastadownload,
-                                                                                   aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                                         'nomereduzido') + '.pdf')
+                                                    novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '.pdf')
                                                 else:
-                                                    novonomearquivo = os.path.join(objeto.pastadownload,
-                                                                                   aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                                         'nomereduzido') + '_' + str(
-                                                                                       i + 1) + '.pdf')
+                                                    novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + str(i + 1) + '.pdf')
                                                 time.sleep(2)
                                                 # Espera o download finalizar
                                                 site.esperadownloads(objeto.pastadownload, timeout)
@@ -1428,11 +1461,13 @@ def livefacilities(objeto, linha):
             return listaboletos
 
     except Exception as e:
-        linha[Resposta] = str(e)
+        # linha[Resposta] = str(e)
+        erro_traceback = traceback.format_exc()
+        linha[Resposta] = str(e) + "\nTraceback completo:\n" + erro_traceback
         linha[CheckErro] = True
 
     finally:
-        linha[Nomefuncao] = __name__
+        linha[Nomefuncao] = inspect.currentframe().f_code.co_name
         if site is not None:
             site.fecharsite()
 
@@ -1440,7 +1475,9 @@ def livefacilities(objeto, linha):
 def nacional(objeto, linha):
     site = None
     listaboletos = []
+    linha[Nomefuncao] = inspect.currentframe().f_code.co_name
     try:
+        linha[ProblemaLogin] = False
         numboleto = 0
         # Prepara o objeto
         site = web.TratarSite(info.retornaradministradora('nomereal', linha[Administradora], 'site'), info.nomeprofilecond)
@@ -1510,14 +1547,9 @@ def nacional(objeto, linha):
                                             boleto.click()
                                             # Define que o nome do arquivo ficará
                                             if i == 1:
-                                                novonomearquivo = os.path.join(objeto.pastadownload,
-                                                                               aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                                     'nomereduzido') + '.pdf')
+                                                novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '.pdf')
                                             else:
-                                                novonomearquivo = os.path.join(objeto.pastadownload,
-                                                                               aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                                     'nomereduzido') + '_' + str(
-                                                                                   i) + '.pdf')
+                                                novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + str(i) + '.pdf')
                                             time.sleep(2)
 
                                             # Espera o download finalizar e "pega" o arquivo baixado (Espera o download pela página download do chrome)
@@ -1552,11 +1584,13 @@ def nacional(objeto, linha):
             return listaboletos
 
     except Exception as e:
-        linha[Resposta] = str(e)
+        # linha[Resposta] = str(e)
+        erro_traceback = traceback.format_exc()
+        linha[Resposta] = str(e) + "\nTraceback completo:\n" + erro_traceback
         linha[CheckErro] = True
 
     finally:
-        linha[Nomefuncao] = __name__
+        linha[Nomefuncao] = inspect.currentframe().f_code.co_name
         if site is not None:
             site.fecharsite()
 
@@ -1564,6 +1598,8 @@ def nacional(objeto, linha):
 def modelopagina(objeto, linha):
     site = None
     listaboletos = []
+    linha[ProblemaLogin] = False
+    linha[Nomefuncao] = inspect.currentframe().f_code.co_name
     try:
         numboleto = 0
         # Prepara o objeto
@@ -1618,11 +1654,9 @@ def modelopagina(objeto, linha):
                                 boleto.click()
                                 # Define que o nome do arquivo ficará
                                 if i == 1:
-                                    novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                                               'nomereduzido') + '.pdf')
+                                    novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '.pdf')
                                 else:
-                                    novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                                               'nomereduzido') + '_' + str(i) + '.pdf')
+                                    novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + str(i) + '.pdf')
                                 time.sleep(2)
 
                                 # Espera o download finalizar e "pega" o arquivo baixado (Espera o download pela página download do chrome)
@@ -1636,7 +1670,7 @@ def modelopagina(objeto, linha):
                                 # Verifica se o arquivo baixado de fato existe
                                 if os.path.isfile(arquivobaixado):
                                     # Move o arquivo para o caminho escolhido adicionando o cabeçalho
-                                    listaboletos.append (aux.adicionarcabecalhopdf(arquivobaixado, novonomearquivo, aux.left(linha[identificador], 4)))
+                                    listaboletos.append(aux.adicionarcabecalhopdf(arquivobaixado, novonomearquivo, aux.left(linha[identificador], 4)))
                                     # Verifica se o arquivo foi gerado
                                     if os.path.isfile(novonomearquivo):
                                         numboleto += 1
@@ -1657,11 +1691,13 @@ def modelopagina(objeto, linha):
             return listaboletos
 
     except Exception as e:
-        linha[Resposta] = str(e)
+        # linha[Resposta] = str(e)
+        erro_traceback = traceback.format_exc()
+        linha[Resposta] = str(e) + "\nTraceback completo:\n" + erro_traceback
         linha[CheckErro] = True
 
     finally:
-        linha[Nomefuncao] = __name__
+        linha[Nomefuncao] = inspect.currentframe().f_code.co_name
         if site is not None:
             site.fecharsite()
 
@@ -1670,6 +1706,8 @@ def protel(objeto, linha):
     site = None
     listaboletos = []
     try:
+        linha[Nomefuncao] = inspect.currentframe().f_code.co_name
+        linha[ProblemaLogin] = False
         mensagemerro = None
         numboleto = 0
         # Prepara o objeto
@@ -1728,11 +1766,9 @@ def protel(objeto, linha):
                                 boleto.click()
                                 # Define que o nome do arquivo ficará
                                 if i == 1:
-                                    novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                                               'nomereduzido') + '.pdf')
+                                    novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '.pdf')
                                 else:
-                                    novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                                               'nomereduzido') + '_' + str(i) + '.pdf')
+                                    novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + str(i) + '.pdf')
                                 time.sleep(2)
 
                                 # Espera o download finalizar e "pega" o arquivo baixado (Espera o download pela página download do chrome)
@@ -1763,160 +1799,394 @@ def protel(objeto, linha):
                         # Retorna que não conseguiu logar
                         linha[ProblemaLogin] = True
 
+        if listaboletos is not None:
+            return listaboletos
+
+    except Exception as e:
+        # linha[Resposta] = str(e)
+        erro_traceback = traceback.format_exc()
+        linha[Resposta] = str(e) + "\nTraceback completo:\n" + erro_traceback
+        linha[CheckErro] = True
+
+    finally:
+        linha[Nomefuncao] = inspect.currentframe().f_code.co_name
+        if site is not None:
+            site.fecharsite()
+
+
+def superlogica(objeto, linha):
+    linha[ProblemaLogin] = False
+    linha[Nomefuncao] = inspect.currentframe().f_code.co_name
+    site = None
+    listaboletos = []
+    try:
+
+        # Quebra o bloco e apartamento da informação
+        if '/' not in linha[Apartamento]:
+            linhabloco = linha[Apartamento] + '/'
+        else:
+            linhabloco = linha[Apartamento]
+
+        apartamentobuscado, blocobuscado = linhabloco.split('/')
+
+        apartamentobuscado = apartamentobuscado.strip()
+        # Garante que o apartamento tenha 4 caracteres
+        if len(apartamentobuscado) > 0 and apartamentobuscado.isdigit():
+            apartamentobuscado = aux.right('0000' + apartamentobuscado, 4).strip()
+
+        # Trata o bloco
+        blocobuscado = blocobuscado.strip()
+
+        # Variável que vai retornar a quantidade de boletos
+        numboleto = 0
+        boletosanalises = 0
+        achouapartamento = False
+
+        # Prepara o objeto
+        site = web.TratarSite(info.retornaradministradora('nomereal', linha[Administradora], 'site'), info.nomeprofilecond)
+        # Abre o browser
+        site.abrirnavegador()
+        # Verifica se iniciou o site
+        if site.url != info.retornaradministradora('nomereal', linha[Administradora], 'site') or site is None:
+            # Caso esteja com outra página aberta, fecha
+            if site is not None:
+                site.fecharsite()
+            # Inicia o browser
+            site = web.TratarSite(info.retornaradministradora('nomereal', linha[Administradora], 'site'), info.nomeprofilecond)
+            # Abre o browser
+            site.abrirnavegador()
+        if site is not None and site.navegador != -1:
+            # Campo de usuário
+            email = site.verificarobjetoexiste('ID', 'email')
+            # Verifica se achou o campo de usuário
+            if email is not None:
+                # Limpa o campo
+                email.clear()
+                # Preenche o campo de usuário
+                email.send_keys(linha[Usuario])
+                delay = site.delay
+                site.delay = 2
+                # Campo de senha
+                cmpsenha = site.verificarobjetoexiste('ID', 'senha')
+                site.delay = delay
+                # Se o campo senha não estiver visível ele "clica" no botão entrar para exibir o campo "senha"
+                if cmpsenha is None:
+                    # Botão de Salvar
+                    btnsalvar = site.verificarobjetoexiste('ID', 'salvar')
+                    # Verifica se achou o botão Salvar
+                    if btnsalvar is not None:
+                        site.navegador.execute_script("arguments[0].click()", btnsalvar)
+                    cmpsenha = site.verificarobjetoexiste('ID', 'senha')
+
+                if cmpsenha is not None:
+                    if cmpsenha.is_displayed():
+                        cmpsenha.send_keys(linha[Senha])
+                        # Botão de Salvar
+                        btnsalvar = site.verificarobjetoexiste('ID', 'salvar')
+                        # Verifica se achou o botão Salvar
+                        if btnsalvar is not None:
+                            site.navegador.execute_script("arguments[0].click()", btnsalvar)
+                            site.delay = 2
+                            # Verifica se deu erro após apertar no botão para realizar o "LOGIN"
+                            msgerro = site.verificarobjetoexiste('ID', 'divMsgErroArea')
+                            site.delay = delay
+                            if msgerro is None:
+                                # Operação normal
+                                testalistacondominio = site.verificarobjetoexiste('CSS_SELECTOR', "[class='item-menu lista-condominio']")
+                                # site.delay = 2
+                                # maisitens = site.verificarobjetoexiste('XPATH', '//*[contains(@id, "btn_mais_itens_cobrancas")]')
+                                # while maisitens is not None:
+                                #     maisitens.click()
+                                #     maisitens = site.verificarobjetoexiste('XPATH', '//*[contains(@id, "btn_mais_itens_cobrancas")]')
+
+                                site.delay = delay
+
+                                if testalistacondominio is not None:
+                                    listacondominios = site.verificarobjetoexiste('CSS_SELECTOR', "[href = '#']", itemunico=False)
+                                    achoucondominio = False
+                                    for icondominio in listacondominios:
+                                        if icondominio.text == linha[Condominio].replace("'", ""):
+                                            achoucondominio = True
+                                            break
+
+                                    if achoucondominio:
+                                        # Botão de expansão de Menu
+                                        setamenu = site.verificarobjetoexiste('CLASS_NAME', "seta-menu")
+                                        if setamenu is not None:
+                                            # Expande o Menu
+                                            site.navegador.execute_script("arguments[0].click()", setamenu)
+                                            time.sleep(1)
+                                            # Clica no condomínio a ser extraído
+                                            site.navegador.execute_script("arguments[0].click()", icondominio)
+                                            site.delay = 2
+                                            maisitens = site.verificarobjetoexiste('XPATH', '//*[contains(@id, "btn_mais_itens_cobrancas")]')
+                                            while maisitens is not None:
+                                                maisitens.click()
+                                                time.sleep(1)
+                                                maisitens = site.verificarobjetoexiste('XPATH', '//*[contains(@id, "btn_mais_itens_cobrancas")]')
+                                                time.sleep(1)
+
+                                            site.delay = delay
+                                            condominioselecionado = site.verificarobjetoexiste('XPATH', '/html/body/div[3]/div[2]/div/div[1]/div[2]/div/div/div/ul/li[3]/div/b')
+                                            nomecondominioselecionado = condominioselecionado.text
+
+                                            time.sleep(1)
+                                            while nomecondominioselecionado.upper() != linha[Condominio].upper():
+                                                condominioselecionado = site.verificarobjetoexiste('XPATH', '/html/body/div[3]/div[2]/div/div[1]/div[2]/div/div/div/ul/li[3]/div/b')
+                                                if condominioselecionado is not None:
+                                                    nomecondominioselecionado = condominioselecionado.text
+                                                else:
+                                                    nomecondominioselecionado = ''
+
+                                            # Verifica se tem a mensagem de que não tem boleto disponível
+                                            if not site.verificarobjetoexiste('CLASS_NAME', 'conteudo-nenhuma-cobranca', sotestar=True):
+                                                if site.verificarobjetoexiste('CLASS_NAME', 'numero', sotestar=True):
+                                                    numapartamentos = site.verificarobjetoexiste('CLASS_NAME', 'numero', itemunico=False)
+                                                    dadosapartamentos = site.verificarobjetoexiste('CSS_SELECTOR', "[class='infos col-md-6']", itemunico=False)
+                                                    complementoapartamentos = site.verificarobjetoexiste('CLASS_NAME', "complemento", itemunico=False)
+                                                    listaapartamentos = zip(numapartamentos, dadosapartamentos, complementoapartamentos)
+                                                    for indice, linhaweb in enumerate(listaapartamentos):
+                                                        # Garante que só o exibido(no caso o "a vencer") seja testado
+                                                        numeroap, dadosap, complementoap = linhaweb
+                                                        # Vai para a tela inicial
+                                                        site.irparaaba(titulo='Areadocondomino')
+                                                        if numeroap.is_displayed():
+
+                                                            if numeroap.text.upper() == apartamentobuscado and complementoap.text.upper() == blocobuscado:
+                                                                achouapartamento = True
+                                                                if "Indisponível" not in dadosap.text:
+                                                                    site.navegador.execute_script("arguments[0].click()", numeroap)
+                                                                    # Seleciona a opção na janela "popup" que aparece
+                                                                    while not site.verificarobjetoexiste('ID', 'salvar', sotestar=True):
+                                                                        time.sleep(1)
+                                                                    btnsalvar = site.verificarobjetoexiste('ID', 'salvar')
+                                                                    site.navegador.execute_script("arguments[0].click()", btnsalvar)
+                                                                    time.sleep(1)
+                                                                    # Vai para a tela inicial
+                                                                    site.irparaaba(titulo='Areadocondomino')
+
+                                                                    # Vai para segunda página que ele abre com o boleto resumido
+                                                                    site.irparaaba(indice=site.num_abas())
+
+                                                                    achoupagina = ('SEGUNDAVIA' in site.navegador.current_url.upper())
+
+                                                                    if achoupagina:
+                                                                        # Aperta no botão para gerar o boleto
+                                                                        btngerarboleto = site.verificarobjetoexiste('XPATH', "//*[contains(@class, 'botao') and contains(@class, 'pagarBoleto')]")
+                                                                        # btngerarboleto = site.verificarobjetoexiste('CSS_SELECTOR', "[class='botao pagarBoleto pagarBoletoParcelado']")
+                                                                        if btngerarboleto is not None:
+                                                                            site.navegador.execute_script("arguments[0].click()", btngerarboleto)
+                                                                            time.sleep(3)
+                                                                            btngerarboleto = site.verificarobjetoexiste('ID', 'btnSubmitParcelamentoCartao')
+                                                                            # while btngerarboleto is None:
+                                                                            #     btngerarboleto = site.verificarobjetoexiste('ID', 'btnSubmitParcelamentoCartao')
+                                                                            #     time.sleep(1)
+                                                                            #
+                                                                            if btngerarboleto is not None:
+                                                                                while not btngerarboleto.is_displayed():
+                                                                                    time.sleep(1)
+
+                                                                                site.navegador.execute_script("arguments[0].click()", btngerarboleto)
+
+                                                                            # Espera o download finalizar
+                                                                            site.esperadownloads(site.caminhodownload, timeout)
+
+                                                                            # Define o nome (baseado no nr do boleto)
+                                                                            if numboleto == 0:
+                                                                                novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '.pdf'
+                                                                            else:
+                                                                                novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '_' + str(numboleto) + '.pdf'
+
+                                                                            # Espera o download finalizar e "pega" o arquivo baixado
+                                                                            arquivobaixado = os.path.join(site.caminhodownload, site.pegaarquivobaixado(tempoesperadownload))
+                                                                            time.sleep(1)
+
+                                                                            # Verifica se o arquivo baixado de fato existe
+                                                                            if os.path.isfile(arquivobaixado):
+                                                                                # Renomeia o arquivo baixado para o código de cliente
+                                                                                listaboletos.append(aux.adicionarcabecalhopdf(arquivobaixado, novonomearquivo, linha[identificador]))
+                                                                                numboleto += 1
+                                                                                time.sleep(1)
+
+                                                                        site.irparaaba(2)
+                                                                        site.fecharaba()
+                                                                        site.irparaaba(1)
+
+                                                                    else:
+                                                                        boletosanalises += 1
+                                                    site.navegador.close()
+                                            else:
+                                                # Não existem boletos em aberto para buscar na lista do apartamento dado como entrada
+                                                linha[Resposta] = respostapadrao(-1)
+                                    else:
+                                        linha[Resposta] = mensagemsemcondominio
+
+                                if len(linha[Resposta]) == 0:
+                                    if not achouapartamento:
+                                        linha[Resposta] = 'Apartamento não encontrado!'
+                                    else:
+                                        linha[Resposta] = respostapadrao(numboleto, boletosanalises)
+                            else:
+                                # Mensagem de erro de Login
+                                linha[Resposta] = msgerro.text
+                                linha[ProblemaLogin] = True
+
+        if listaboletos is not None:
+            return listaboletos
+
     except Exception as e:
         linha[Resposta] = str(e)
         linha[CheckErro] = True
 
     finally:
-        linha[Nomefuncao] = __name__
+        linha[Nomefuncao] = inspect.currentframe().f_code.co_name
         if site is not None:
             site.fecharsite()
-
-    if listaboletos is not None:
-        return listaboletos
 
 
 def Webware(objeto, linha):
     site = None
     listaboletos = []
-    # try:
-    numboleto = 0
-    linha[Nomefuncao] = __name__
-    match info.retornaradministradora('nomereal', linha[Administradora], 'nomereduzido'):
-        case "CONAC":
-            codigo = "19834090"
+    linha[ProblemaLogin] = False
 
-        case "LOWNDES":
-            codigo = "33105362"
+    try:
+        numboleto = 0
+        linha[Nomefuncao] = __name__
+        match info.retornaradministradora('nomereal', linha[Administradora], 'nomereduzido'):
+            case "CONAC":
+                codigo = "19834090"
 
-        case "ACIR":
-            codigo = "42168518"
+            case "LOWNDES":
+                codigo = "33105362"
 
-        case _:
-            codigo = ''
+            case "ACIR":
+                codigo = "42168518"
 
-    # Abre o site dependendo da administradora
-    if len(codigo) > 0:
-        # Retorna o texto do site
-        textosite = "https://www.webware.com.br/bin/administradora/default.asp?adm=" + str(codigo)
-        textosite = textosite.lower()
-        # Prepara o objeto
-        site = web.TratarSite(textosite, info.nomeprofilecond)
-        # Abre o browser
-        site.abrirnavegador()
-        # Verifica se iniciou o site
-        if site.url != textosite or site is None:
-            # Caso esteja com outra página aberta, fecha
-            if site is not None:
-                site.fecharsite()
-            # Inicia o browser
+            case _:
+                codigo = ''
+
+        # Abre o site dependendo da administradora
+        if len(codigo) > 0:
+            # Retorna o texto do site
+            textosite = "https://www.webware.com.br/bin/administradora/default.asp?adm=" + str(codigo)
+            textosite = textosite.lower()
+            # Prepara o objeto
             site = web.TratarSite(textosite, info.nomeprofilecond)
             # Abre o browser
             site.abrirnavegador()
-        if site is not None and site.navegador != -1:
-            # Pega o delay configurado no objeto "Site"
-            delay = site.delay
-            # Botão de Login
-            botao = site.verificarobjetoexiste('CSS_SELECTOR', "[type='Submit']")
-            # Verifica se achou o botão de ‘login’
-            if botao is not None:
-                # Campo de Usuário
-                cmpusuario = site.verificarobjetoexiste('NAME', 'mem')
-                if cmpusuario is not None:
-                    cmpusuario.send_keys(linha[Usuario])
-                # Campo de Senha
-                cmpsenha = site.verificarobjetoexiste('NAME', 'pass')
-                if cmpsenha is not None:
-                    cmpsenha.send_keys(linha[Senha])
-                # Clica no botão de ‘login’
-                botao.click()
+            # Verifica se iniciou o site
+            if site.url != textosite or site is None:
+                # Caso esteja com outra página aberta, fecha
+                if site is not None:
+                    site.fecharsite()
+                # Inicia o browser
+                site = web.TratarSite(textosite, info.nomeprofilecond)
+                # Abre o browser
+                site.abrirnavegador()
+            if site is not None and site.navegador != -1:
+                # Pega o delay configurado no objeto "Site"
+                delay = site.delay
+                # Botão de Login
+                botao = site.verificarobjetoexiste('CSS_SELECTOR', "[type='Submit']")
+                # Verifica se achou o botão de ‘login’
+                if botao is not None:
+                    # Campo de Usuário
+                    cmpusuario = site.verificarobjetoexiste('NAME', 'mem')
+                    if cmpusuario is not None:
+                        cmpusuario.send_keys(linha[Usuario])
+                    # Campo de Senha
+                    cmpsenha = site.verificarobjetoexiste('NAME', 'pass')
+                    if cmpsenha is not None:
+                        cmpsenha.send_keys(linha[Senha])
+                    # Clica no botão de ‘login’
+                    botao.click()
 
-                site.delay = 2
-                # Mensagem de erro
-                erro = site.verificarobjetoexiste('CLASS_NAME', 'mensagem-erro')
-                site.delay = delay
-                if erro is None:
-                    # Botão de segunda via
-                    botaosegundavia = site.verificarobjetoexiste('CLASS_NAME', 'statistic__item ')
+                    site.delay = 2
+                    # Mensagem de erro
+                    erro = site.verificarobjetoexiste('CLASS_NAME', 'mensagem-erro')
+                    site.delay = delay
+                    if erro is None:
+                        # Botão de segunda via
+                        botaosegundavia = site.verificarobjetoexiste('CLASS_NAME', 'statistic__item ')
 
-                    # Verifica se existe o botão de segunda via
-                    if botaosegundavia is not None:
-                        botaosegundavia.click()
-                        # Pega o objeto do frame
-                        janelaboleto = site.verificarobjetoexiste('CLASS_NAME', 'prestacao-interativa')
-                        if janelaboleto is not None:
-                            # Mudar para o frame dos boletos
-                            site.irparaframe(janelaboleto)
-
-                            # Verifica se tem e está visível o ícone de carregando no frame
-                            telacarregando = site.verificarobjetoexiste('CLASS_NAME', 'carregando')
-                            if telacarregando is not None:
-                                while telacarregando.is_displayed():
-                                    time.sleep(1)
-
-                            # Verifica se acha botao de alerta
-                            botaoalerta = site.verificarobjetoexiste('CLASS_NAME', 'popup-alerta-botoes')
-                            time.sleep(2)
-
-                            # Verifica se tem o botão de aceitar o alerta
-                            if botaoalerta is not None:
-                                # Clica no botão de aceitar o alerta
-                                botaoalerta.click()
-
-                            # Pega todos os botões de gerar boleto do frame
-                            objetosboletos = site.verificarobjetoexiste('XPATH', '//a[contains(@href,"/relatorioboleto/BuscarBoletoPorRecibo?")]', itemunico=False)  # Debug
-                            for i, boleto in enumerate(objetosboletos, start=1):
-                                # Clica no botão de boleto
-                                boleto.click()
-
-                                # Espera o download finalizar e "pega" o arquivo baixado
-                                arquivobaixado = os.path.join(site.caminhodownload, site.pegaarquivobaixado(tempoesperadownload, 1))
-
-                                # Define que o nome do arquivo ficará
-                                if i == 1:
-                                    novonomearquivo = os.path.join(objeto.pastadownload,
-                                                                   aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                         'nomereduzido') + '.pdf')
-                                else:
-                                    novonomearquivo = os.path.join(objeto.pastadownload,
-                                                                   aux.left(linha[identificador], 4) + '_' + info.retornaradministradora('nomereal', linha[Administradora],
-                                                                                                                                         'nomereduzido') + '_' + str(i) + '.pdf')
-
-                                # Verifica se o arquivo baixado de fato existe
-                                if os.path.isfile(arquivobaixado):
-                                    # Move o arquivo para o caminho escolhido
-                                    aux.adicionarcabecalhopdf(arquivobaixado, novonomearquivo, aux.left(linha[identificador], 4))
-
-                                    # Verifica se o arquivo foi gerado
-                                    if os.path.isfile(novonomearquivo):
-                                        numboleto += 1
-
-                                    time.sleep(1)
-
-                                # Volta pra aba original
-                                site.irparaaba(1)
-                                # Volta pro frame
+                        # Verifica se existe o botão de segunda via
+                        if botaosegundavia is not None:
+                            botaosegundavia.click()
+                            # Pega o objeto do frame
+                            janelaboleto = site.verificarobjetoexiste('CLASS_NAME', 'prestacao-interativa')
+                            if janelaboleto is not None:
+                                # Mudar para o frame dos boletos
                                 site.irparaframe(janelaboleto)
 
-                            # Retorna resposta na linha
-                            linha[Resposta] = respostapadrao(numboleto)
-                else:
-                    # Retorna a tela de erro
-                    linha[Resposta] = erro.text
-                    # Retorna que não conseguiu logar
-                    linha[ProblemaLogin] = True
+                                # Verifica se tem e está visível o ícone de carregando no frame
+                                telacarregando = site.verificarobjetoexiste('CLASS_NAME', 'carregando')
+                                if telacarregando is not None:
+                                    while telacarregando.is_displayed():
+                                        time.sleep(1)
 
-    if listaboletos is not None:
-        return listaboletos
+                                # Verifica se acha botao de alerta
+                                botaoalerta = site.verificarobjetoexiste('CLASS_NAME', 'popup-alerta-botoes')
+                                time.sleep(2)
 
-    # except Exception as e:
-    #     linha[Resposta] = str(e)
-    #     linha[CheckErro] = True
-    #
-    # finally:
-    #     linha[Nomefuncao] = __name__
-    #     if site is not None:
-    #         site.fecharsite()
+                                # Verifica se tem o botão de aceitar o alerta
+                                if botaoalerta is not None:
+                                    # Clica no botão de aceitar o alerta
+                                    botaoalerta.click()
+
+                                # Pega todos os botões de gerar boleto do frame
+                                objetosboletos = site.verificarobjetoexiste('XPATH', '//a[contains(@href,"/relatorioboleto/BuscarBoletoPorRecibo?")]', itemunico=False)  # Debug
+                                for i, boleto in enumerate(objetosboletos, start=1):
+                                    # Clica no botão de boleto
+                                    boleto.click()
+
+                                    # Espera o download finalizar e "pega" o arquivo baixado
+                                    arquivobaixado = os.path.join(site.caminhodownload, site.pegaarquivobaixado(tempoesperadownload, 1))
+
+                                    # Define que o nome do arquivo ficará
+                                    if i == 1:
+                                        novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '.pdf')
+                                    else:
+                                        novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + '_' + str(i) + '.pdf')
+
+                                    # Verifica se o arquivo baixado de fato existe
+                                    if os.path.isfile(arquivobaixado):
+                                        # Move o arquivo para o caminho escolhido
+                                        listaboletos.append(aux.adicionarcabecalhopdf(arquivobaixado, novonomearquivo, aux.left(linha[identificador], 4)))
+
+                                        # Verifica se o arquivo foi gerado
+                                        if os.path.isfile(novonomearquivo):
+                                            numboleto += 1
+
+                                        time.sleep(1)
+
+                                    # Volta pra aba original
+                                    site.irparaaba(1)
+                                    # Volta pro frame
+                                    site.irparaframe(janelaboleto)
+
+                                # Retorna resposta na linha
+                                linha[Resposta] = respostapadrao(numboleto)
+                    else:
+                        # Retorna a tela de erro
+                        linha[Resposta] = erro.text
+                        # Retorna que não conseguiu logar
+                        linha[ProblemaLogin] = True
+        if site is not None:
+            site.fecharsite()
+
+        if listaboletos is not None:
+            return listaboletos
+
+    except Exception as e:
+        # linha[Resposta] = str(e)
+        erro_traceback = traceback.format_exc()
+        linha[Resposta] = str(e) + "\nTraceback completo:\n" + erro_traceback
+        linha[CheckErro] = True
+
+    finally:
+        linha[Nomefuncao] = inspect.currentframe().f_code.co_name
+        if site is not None:
+            site.fecharsite()
 
 
 def respostapadrao(quant, quantanalise=0):

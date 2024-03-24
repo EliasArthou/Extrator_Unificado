@@ -93,7 +93,7 @@ def extrairboletos(objeto, linha, nrguia=0, site=None):
 
                             site.delay = 2
                             # Verifica se teve mensagem de erro
-                            mensagemerro = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_MENSAGEM')
+                            mensagemerro = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_MSG')
                             site.delay = 10
                             if mensagemerro is not None:
                                 if hasattr(mensagemerro, 'text'):
@@ -220,7 +220,7 @@ def extrairboletos(objeto, linha, nrguia=0, site=None):
                                                     if len(baixado) > 0:
                                                         objeto.visual.mudartexto('labelstatus', 'Salvando Boleto...')
                                                         caminhodestino = aux.to_raw(caminhodestino)
-                                                        aux.adicionarcabecalhopdf(baixado, caminhodestino, codigocliente)
+                                                        aux.adicionarcabecalhopdf(baixado, caminhodestino, codigocliente, codigobarras=False)
                                 if nrguia == 0 and len(guias):
                                     for indice, guia in enumerate(guias):
                                         if site is not None:
@@ -384,7 +384,7 @@ def extrairnadaconsta(objeto, linha, dataatual=''):
 
                                     if len(baixado) > 0:
                                         caminhodestino = aux.to_raw(caminhodestino)
-                                        aux.adicionarcabecalhopdf(baixado, caminhodestino, codigocliente)
+                                        aux.adicionarcabecalhopdf(baixado, caminhodestino, codigocliente, codigobarras=False)
 
                                 else:
                                     dadosiptu = [codigocliente, linha[NrIPTU], anoextracao, 'Verificar (Extrair Manualmente)']
@@ -499,7 +499,7 @@ def extraircertidaonegativa(objeto, linha, dataatual=''):
 
                                                 if len(baixado) > 0:
                                                     caminhodestino = aux.to_raw(caminhodestino)
-                                                    aux.adicionarcabecalhopdf(baixado, caminhodestino, codigocliente)
+                                                    aux.adicionarcabecalhopdf(baixado, caminhodestino, codigocliente, codigobarras=False)
 
                                             else:
                                                 dadosiptu = [codigocliente, linha[NrIPTU], anoextracao, 'Verificar (Extrair Manualmente)']
@@ -739,7 +739,7 @@ def extrairbombeiros(objeto, linha, dataatual=''):
                                                                         caminhodestino = objeto.pastadownload + '/' + listaanos[indicebotao - 1] + '_' + codigocliente + '_' + \
                                                                                          linha[NrCBM] + '_' + str(indiceano) + '.pdf'
                                                                     caminhodestino = aux.to_raw(caminhodestino)
-                                                                    aux.adicionarcabecalhopdf(baixado, caminhodestino, codigocliente)
+                                                                    aux.adicionarcabecalhopdf(baixado, caminhodestino, codigocliente, codigobarras=False)
 
 
                                                         # Verifica se tem abas abertas de boletos
@@ -763,8 +763,7 @@ def extrairbombeiros(objeto, linha, dataatual=''):
                                 # Verifica se o problema não foi o captcha
                                 if resolveucaptcha:
                                     # Linha de erro para carregar no Excel
-                                    dadosbombeiros = [codigocliente, aux.left(str(linha[NrCBM]), 7) + '-' + aux.right(str(linha[NrCBM]), 1), '', '', '', '', '', '', '', '', '',
-                                                '', '', '', mensagemerro]
+                                    dadosbombeiros = [codigocliente, aux.left(str(linha[NrCBM]), 7) + '-' + aux.right(str(linha[NrCBM]), 1), '', '', '', '', '', '', '', '', '', '', '', '', mensagemerro]
                                 # Fecha o site
                                 site.fecharsite()
                     else:

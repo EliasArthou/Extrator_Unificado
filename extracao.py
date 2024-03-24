@@ -4,6 +4,8 @@ Extração em geral
 
 import datetime
 import os
+
+import boletos
 import web
 import auxiliares as aux
 import sensiveis as senha
@@ -93,12 +95,18 @@ class Extrator:
                     self.sql = senha.sqliptucompleto
 
             case 'Condomínios':
+                if self.bd is None:
+                    self.bd = aux.Banco(caminhobanco)
+
+                if self.visual.iniciodomes:
+                    self.bd.executarsql('DELETE * FROM BoletosCondominios')
+
                 self.sql = aux.retornarlistaboletos()
 
             case _:
                 msg.msgbox(f'Opção Inválida!', msg.MB_OK, 'Opção não reconhecida!')
-
-        self.bd = aux.Banco(caminhobanco)
+        if self.bd is None:
+            self.bd = aux.Banco(caminhobanco)
 
         if len(str(self.indicecliente)) > 0:
             self.indicecliente = str(self.indicecliente).zfill(4)
@@ -120,6 +128,7 @@ class Extrator:
                 self.extrairboletos()
 
             case 'Condomínios':
+
                 self.extraircondominio()
 
             case _:
@@ -435,7 +444,6 @@ class Extrator:
         dadosiptu = None
         linhatemp = []
 
-
         # try:
 
         self.listaexcel = []
@@ -490,6 +498,7 @@ class Extrator:
         self.listachaves = ['Código', 'Login', 'Senha', 'Administradora', 'Condomínio', 'Unidade', 'Resposta', 'Check de Arquivo', 'CheckErro', 'Nome Função', 'Problema Login']
         self.listaexcel = []
 
+        self.resultado = self.resultado
         for indice, linha in enumerate(self.resultado):
             codigocliente = linha[condominios.identificador]
             # ===================================== Parte Gráfica =======================================================
@@ -505,16 +514,16 @@ class Extrator:
                 multiplas = aux.encontrar_administradora(linha[condominios.Administradora])
                 if multiplas is None:
                     listatemp = getattr(condominios, senha.retornaradministradora('nomereal', linha[condominios.Administradora], 'nomereduzido').lower())(self, linha)
-                    if listatemp is not None:
+                    if listatemp is not None and len(listatemp) > 0:
                         listaboletos = listaboletos + listatemp
                     # listaboletos.append(getattr(condominios, senha.retornaradministradora('nomereal', linha[condominios.Administradora], 'nomereduzido').lower())(self, linha))
                 else:
                     listatemp = getattr(condominios, multiplas['Site'])(self, linha)
-                    if listatemp is not None:
+                    if listatemp is not None and len(listatemp) > 0:
                         listaboletos = listaboletos + listatemp
-                print(listatemp)
                 listatemp = None
-                    # listaboletos.append(getattr(condominios, multiplas['Site'])(self, linha))
+
+                # listaboletos.append(getattr(condominios, multiplas['Site'])(self, linha))
 
             else:
                 linha[condominios.Resposta] = 'Usuário e/ou senha não preenchido!'
@@ -523,18 +532,26 @@ class Extrator:
                     linha[condominios.Resposta] = condominios.mensagemerropadrao
                 self.visual.mudartexto('labelstatus', linha[condominios.Resposta])
 
+        listatemp = aux.get_files_not_in_list(listaboletos, self.pastadownload)
+        for item in listatemp:
+            itemtemp = boletos.barcodereader(item)
+            if itemtemp is not None:
+                listaboletos.append(itemtemp)
+
         if listaboletos is not None:
             # Convertendo a lista de dicionários em um DataFrame
             df = pd.DataFrame(listaboletos)
 
-            # Salvando o DataFrame em um arquivo Excel
-            df.to_excel('saida.xlsx', index=False)
+            self.bd.adicionardf('BoletosCondominios', df, 1)
+            if os.path.isfile(aux.caminhoprojeto()+'\\saida.xlsx'):
+                # Salvando o DataFrame em um arquivo Excel
+                df.to_excel('saida.xlsx', index=False)
 
     def criarlistadicionarios(self):
         # Verifica se tem dados e cabeçalhos nas respectivas linhas e se as mesmas têm a mesma quantidade de colunas
-        if len(self.listachaves) > 0 and len(self.listadados) > 0 and all(len(sublist) == len(self.listachaves) for sublist in self.listadados):
+        if len(self.listachaves) > 0 and len(self.resultado) > 0 and all(len(sublist) == len(self.listachaves) for sublist in self.resultado):
             lista_de_dicionarios = []
-            for valores_correspondentes in self.listadados:
+            for valores_correspondentes in self.resultado:
                 novo_dicionario = {chave: valor for chave, valor in zip(self.listachaves, valores_correspondentes)}
                 lista_de_dicionarios.append(novo_dicionario)
             return lista_de_dicionarios

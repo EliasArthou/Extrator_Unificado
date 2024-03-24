@@ -29,6 +29,7 @@ class App(tk.Tk):
         self.c1 = None
         self.c2 = None
         self.c3 = None
+        self.iniciodomes = None
         self.tipoextracao = ''
         self.tiposervico = ''
         self.somentevalores = None
@@ -92,6 +93,9 @@ class App(tk.Tk):
 
         # Salvar Código de Barras no BD
         self.codigosdebarra = tk.BooleanVar()
+
+        # Apagar a lista de condomínios para iniciar o mes
+        self.iniciodomes = tk.BooleanVar()
 
         # Só pega os valores que ainda não foram extraídos
         self.faltantes = tk.BooleanVar(value=True)
@@ -213,7 +217,7 @@ class App(tk.Tk):
                     self.c2.destroy()
                     self.c3.destroy()
 
-            case _:
+            case 'Condomínios':
                 if self.labelradio is not None:
                     self.labelradio.destroy()
                 if executando:
@@ -224,6 +228,32 @@ class App(tk.Tk):
                     self.labelservico = None
                     self.cmbtiposervico = None
 
+                if self.cotaunica is not None:
+                    self.cotaunica.destroy()
+                if self.data1 is not None:
+                    self.data1.destroy()
+                if self.data2 is not None:
+                    self.data2.destroy()
+                if self.data3 is not None:
+                    self.data3.destroy()
+                if self.cotaunica is not None:
+                    self.cotaunica.destroy()
+                if self.cotaparcelada is not None:
+                    self.cotaparcelada.destroy()
+                if self.c1 is not None:
+                    self.c1.destroy()
+                if self.c2 is not None:
+                    self.c2.destroy()
+                if self.c3 is not None:
+                    self.c3.destroy()
+
+                if criarradio:
+                    self.c2 = tk.Checkbutton(self, text='Carga de início de mês?', variable=self.iniciodomes, onvalue=True, offvalue=False, font="Arial 10")
+                    self.c2.place(relx=0.05, y=142)
+                else:
+                    self.c2.destroy()
+
+            case _:
                 if self.cotaunica is not None:
                     self.cotaunica.destroy()
                 if self.data1 is not None:

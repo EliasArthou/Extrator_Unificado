@@ -386,6 +386,29 @@ class TratarSite:
 
         return resposta, textoerro
 
+    def resolvecaptchatipo2(self):
+        from anticaptchaofficial import recaptchav2proxyless
+
+        chavesite = '6LdZ1EQkAAAAAAKRMr1Dhld-8WiyW5Qt0HgCXyfa'
+
+        solver = recaptchav2proxyless()
+        solver.set_verbose(1)
+        solver.set_key(senhas.chaveanticaptcha)
+        solver.set_website_url(self.navegador.current_url)
+        solver.set_website_key(chavesite)
+        # set optional custom parameter which Google made for their search page Recaptcha v2
+        # solver.set_data_s('"data-s" token from Google Search results "protection"')
+
+        # Specify softId to earn 10% commission with your app.
+        # Get your softId here: https://anti-captcha.com/clients/tools/devcenter
+        solver.set_soft_id(0)
+
+        g_response = solver.solve_and_return_solution()
+        if g_response != 0:
+            print("g-response: " + g_response)
+        else:
+            print("task finished with error " + solver.error_code)
+
     def retornartabela(self, tipolista):
         import re
         import unicodedata

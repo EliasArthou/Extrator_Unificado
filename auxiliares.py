@@ -5,7 +5,7 @@ Todas as funções de suporte
 import os
 import sys
 import time
-import pypyodbc as pyodbc
+import pyodbc
 import glob
 import shutil
 import sensiveis as senha
@@ -13,31 +13,43 @@ import requests
 import pandas as pd
 import win32gui
 import boletos
+from sqlalchemy import create_engine
+from urllib.parse import quote_plus
+
 
 caminho = ''
 
 
 class Banco:
-    """
-    Criado para se conectar e realizar operações no banco de dados
-    """
-
     def __init__(self, caminho):
         self.conxn = None
         self.cursor = None
+        self.engine = None
+        self.erro = ''
         self.constr = 'Driver={Microsoft Access Driver (*.mdb, *.accdb)};Dbq=' + caminho + ';Pwd=' + senha.senhabanco
         self.abrirconexao()
 
     def abrirconexao(self):
-        if len(self.constr) > 0:
-            self.conxn = pyodbc.connect(self.constr)
-            self.cursor = self.conxn.cursor()
+        try:
+            if self.conxn is not None:
+                try:
+                    self.cursor.execute("SELECT 1")
+                    return
+                except pyodbc.Error:
+                    self.conxn = None
+
+            if len(self.constr) > 0:
+                self.conxn = pyodbc.connect(self.constr)
+                self.cursor = self.conxn.cursor()
+                self.cursor.execute("SELECT 1")
+                self.cursor = self.conxn.cursor()
+                self.engine = pd.io.sql.pandasSQL_builder(self)
+
+        except pyodbc.Error as e:
+            self.erro = str(e)
 
     def consultar(self, sql):
-        """
-        :param sql: código sql a ser executado (uma consulta SQL).
-        :return: o resultado da consulta em uma lista.
-        """
+        self.abrirconexao()
         self.cursor.execute(sql)
         resultado = self.cursor.fetchall()
         resultado = [
@@ -46,36 +58,198 @@ class Banco:
         ]
         return resultado
 
+    def obter_nome_coluna_por_indice(self, tabela, indice):
+        """
+        Obtém o nome da coluna da tabela do Access com base no índice.
+        """
+        # Obter informações sobre a estrutura da tabela
+        estrutura_tabela = self.cursor.columns(table=tabela)
+
+        # Percorrer as informações da estrutura da tabela para encontrar o nome da coluna com base no índice
+        for coluna_info in estrutura_tabela:
+            if coluna_info.ordinal == indice + 1:
+                return coluna_info.column_name
+
+        # Se o índice fornecido estiver fora do intervalo, retorne None
+        return None
+
     def adicionardf(self, tabela, df, indicelimpeza=-1):
-        for linha in df.values:
-            my_list = [str(x) for x in linha]
-            if len(my_list) > 0:
-                if indicelimpeza != -1:
-                    self.abrirconexao()
-                    strSQL = "DELETE * FROM [%s] WHERE Barras = %s" % (tabela, my_list[indicelimpeza])
-                    self.cursor.execute(strSQL)
-                    self.conxn.commit()
+        try:
+            self.abrirconexao()
+    
+            # Exclui os registros existentes na tabela com base no índice indicado
+            if 0 <= indicelimpeza < len(df.columns):
+                nome_coluna_df = df.columns[indicelimpeza]
+                colunatabela = self.obter_nome_coluna_por_indice(tabela, indicelimpeza)
+    
+                if colunatabela is not None:
+                    # Consulta para excluir os registros existentes na tabela que têm chaves primárias correspondentes aos registros no dataframe
+                    consulta_delete = f"DELETE FROM {tabela} WHERE {colunatabela} IN ({','.join(['?'] * len(df))})"
+                    self.cursor.execute(consulta_delete, tuple(df[nome_coluna_df]))
+            df.to_sql(tabela, self.engine, if_exists='append', index=False)
+            self.conxn.commit()
+        except pyodbc.Error as e:
+            print("Erro ao inserir DataFrame na tabela:", e)
+            # # Salvar o dataframe na tabela do banco de dados
+            # for _, row in df.iterrows():
+            #     values = tuple(row)
+            #     placeholders = ','.join(['?'] * len(values))
+            #     insert_sql = f"INSERT INTO {tabela} VALUES ({placeholders})"
+            #     self.cursor.execute(insert_sql, values)
+            #
+            # self.conxn.commit()
 
-                strSQL = "INSERT INTO [" + tabela + "] VALUES (%s)" % ', '.join(my_list)
-                self.cursor.execute(strSQL)
-                self.conxn.commit()
+    def executarsql(self, sql):
+        try:
+            self.abrirconexao()
+            self.cursor.execute(sql)
+            rows_affected = self.cursor.rowcount
+            self.conxn.commit()
+            return rows_affected
 
-        # df.to_csv('df.csv', sep=';', encoding='utf-8', index=False)
-
-        # RUN QUERY
-        # strSQL = "INSERT INTO [%s] SELECT * FROM [text;HDR=Yes;FMT=Delimited(;);Database=D:\Projetos\Extrair Imposto].[df.csv]" % tabela
-
-        # self.cursor.execute(strSQL)
-        # self.conxn.commit()
-
-        self.conxn.close()  # CLOSE CONNECTION
-        # os.remove('df.csv')
+        finally:
+            self.conxn.close()
+            self.conxn = None
 
     def fecharbanco(self):
-        """
-        Fecha a conexão com o banco de dados
-        """
-        self.cursor.close()
+        if self.cursor:
+            self.cursor.close()
+        if self.conxn:
+            self.conxn.close()
+
+# class Banco:
+#     """
+#     Criado para se conectar e realizar operações no banco de dados
+#     """
+#
+#     def __init__(self, caminho):
+#         self.conxn = None
+#         self.cursor = None
+#         self.erro = ''
+#         self.engine = None
+#         self.constr = 'Driver={Microsoft Access Driver (*.mdb, *.accdb)};Dbq=' + caminho + ';Pwd=' + senha.senhabanco
+#         # Crie a string de conexão
+#         self.params = quote_plus(self.constr)
+#
+#         self.abrirconexao()
+#
+#     def abrirconexao(self):
+#         try:
+#             # Verifica se a conexão já existe e está aberta
+#             if self.conxn is not None:
+#                 try:
+#                     # Tenta executar um comando simples para verificar a conexão
+#                     self.cursor.execute("SELECT 1")
+#                     return  # Conexão está ativa, então não precisa abrir outra
+#                 except pyodbc.Error:
+#                     # A conexão existente falhou, então tentaremos reconectar
+#                     self.conxn = None  # Resetar a conexão para tentar novamente
+#
+#             if len(self.constr) > 0:
+#                 self.engine = create_engine("mssql+pyodbc:///?odbc_connect=%s" % self.params)
+#                 self.conxn = pyodbc.connect(self.constr)
+#                 self.cursor = self.conxn.cursor()
+#                 self.cursor.execute("SELECT 1")
+#                 # self.cursor.close()
+#                 self.cursor = self.conxn.cursor()
+#
+#         except pyodbc.Error as e:
+#             self.erro = str(e)
+#
+#     def consultar(self, sql):
+#         """
+#         :param sql: código sql a ser executado (uma consulta SQL).
+#         :return: o resultado da consulta em uma lista.
+#         """
+#         self.abrirconexao()
+#
+#         self.cursor.execute(sql)
+#         resultado = self.cursor.fetchall()
+#         resultado = [
+#             list(str(value).strip() if isinstance(value, str) else value for value in row)
+#             for row in resultado
+#         ]
+#         return resultado
+#
+#     def adicionardf(self, tabela, df, indicelimpeza=-1):
+#         # try:
+#         self.abrirconexao()
+#
+#         # Se indicelimpeza for fornecido, limpe os registros antes de adicionar novos
+#         # if indicelimpeza != -1:
+#         #     for linha in df.values:
+#         #         barras = str(linha[indicelimpeza])
+#         #         # Constrói a instrução SQL DELETE
+#         #         strSQL = "DELETE FROM [{0}] WHERE Barras = ?".format(tabela)
+#         #
+#         #         # Executa a consulta DELETE com a variável 'barras' como parâmetro
+#         #         self.cursor.execute(strSQL, (barras,))
+#         #     self.conxn.commit()
+#         # Consulta para excluir os registros existentes na tabela que têm chaves primárias correspondentes aos registros no dataframe
+#         consulta_delete = f"DELETE FROM {tabela} WHERE barras IN (%s)" % ','.join(['%s'] * len(df))
+#         with self.engine.connect() as conn:
+#             conn.execute(consulta_delete, tuple(df['barras']))
+#
+#         # Salvar o dataframe na tabela do banco de dados
+#         df.to_sql(tabela, self.engine, if_exists='append', index=False, chunksize=1000)
+#
+#         # Prepara a instrução SQL de inserção
+#         # num_colunas = len(df.columns)
+#         # placeholders = ','.join(['?'] * num_colunas)
+#         # strSQL = "INSERT INTO [{0}] VALUES ({1})".format(tabela, placeholders)
+#         #
+#         # # Executa a inserção em bloco
+#         # registros = [tuple(map(str, linha)) for linha in df.values]
+#         # self.cursor.executemany(strSQL, registros)
+#         # self.conxn.commit()
+#
+#         # except pyodbc.Error as e:
+#         #     self.erro = str(e)
+#         #
+#         # finally:
+#         #     self.conxn.close()
+#
+#         # for linha in df.values:
+#         #     my_list = [str(x) for x in linha]
+#         #     if len(my_list) > 0:
+#         #         if indicelimpeza != -1:
+#         #             self.abrirconexao()
+#         #             strSQL = "DELETE * FROM [%s] WHERE Barras = %s" % (tabela, my_list[indicelimpeza])
+#         #             self.cursor.execute(strSQL)
+#         #             self.conxn.commit()
+#         #
+#         #         strSQL = "INSERT INTO [" + tabela + "] VALUES (%s)" % ', '.join(my_list)
+#         #         self.cursor.execute(strSQL)
+#         #         self.conxn.commit()
+#
+#         # df.to_csv('df.csv', sep=';', encoding='utf-8', index=False)
+#
+#         # RUN QUERY
+#         # strSQL = "INSERT INTO [%s] SELECT * FROM [text;HDR=Yes;FMT=Delimited(;);Database=D:\Projetos\Extrair Imposto].[df.csv]" % tabela
+#
+#         # self.cursor.execute(strSQL)
+#         # self.conxn.commit()
+#
+#         # self.conxn.close()  # CLOSE CONNECTION
+#         # os.remove('df.csv')
+#
+#     def executarsql(self, sql):
+#         try:
+#             self.abrirconexao()
+#             self.cursor.execute(sql)
+#             rows_affected = self.cursor.rowcount
+#             self.conxn.commit()  # Certifique-se de fazer o commit após a execução
+#             return rows_affected
+#
+#         finally:
+#             self.conxn.close()
+#             self.conxn = None
+#
+#     def fecharbanco(self):
+#         """
+#         Fecha a conexão com o banco de dados
+#         """
+#         self.cursor.close()
 
 
 def caminhoprojeto(subpasta=''):
@@ -461,7 +635,7 @@ def extrairtextopdf(caminho, tipos):
                     listalimpa.append("'" + linha.replace('\n', '') + "'")
             df['Vencimentos'] = listalimpa
 
-            lista = re.findall(r'CONTRIBUINTE\n([\D]*)[\d]{2}.', texto)
+            lista = re.findall(r'CONTRIBUINTE\n(.*?)\d{2}\.', texto, re.DOTALL)
             listalimpa = []
             for indice, linha in enumerate(lista):
                 if indice % 2:
@@ -574,7 +748,7 @@ def timezones_disponiveis():
     return timezones
 
 
-def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, centralizado=False):
+def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, centralizado=False, codigobarras=True):
     import fitz
 
     tempoespera = 0
@@ -615,21 +789,23 @@ def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, centralizado=False
                         break
             # Salvo o arquivo com o cabeçalho
             pdf.save(arquivodestino)
-        while not (os.path.isfile(arquivodestino) or tempoespera <= 30):
-            time.sleep(1)
-            tempoespera += 1
 
-        tempoespera = 0
+        # while not (os.path.isfile(arquivodestino) or tempoespera <= 30):
+        #     time.sleep(1)
+        #     tempoespera += 1
+        #
+        # tempoespera = 0
 
         # Verifica se o arquivo foi salvo
         if os.path.isfile(arquivodestino):
             # Apaga o arquivo original
             os.remove(arquivo)
 
-            # Pega as informações do boleto (linha digitável, vencimento, valor)
-            dadosboleto = boletos.barcodereader(arquivodestino)
-            if dadosboleto is not None:
-                return dadosboleto
+            if codigobarras:
+                # Pega as informações do boleto (linha digitável, vencimento, valor)
+                dadosboleto = boletos.barcodereader(arquivodestino)
+                if dadosboleto is not None:
+                    return dadosboleto
 
 
 def removersenhapdf(arquivobloqueado):
@@ -723,12 +899,23 @@ def retornastrinflistaadm(campo):
 
 
 def retornarlistaboletos(listaadministradora=None):
-    if listaadministradora is not None:
-        string_nomes_administradoras = ', '.join(["'{}'".format(item) for item in listaadministradora])
-        sql = (senha.sqlcondominios + ' WHERE NomeAdm in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
-    else:
-        sql = (senha.sqlcondominios + ' WHERE NomeAdm in (%s) ORDER BY Codigo;' % retornastrinflistaadm('nomereal'))
+    if 'WHERE' not in senha.sqlcondominios:
+        if listaadministradora is not None:
+            string_nomes_administradoras = ', '.join(["'{}'".format(item) for item in listaadministradora])
 
+            sql = (senha.sqlcondominios + ' WHERE NomeAdm in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
+        else:
+            sql = (senha.sqlcondominios + ' WHERE NomeAdm in (%s) ORDER BY Codigo;' % retornastrinflistaadm('nomereal'))
+    else:
+        if listaadministradora is not None:
+
+            string_nomes_administradoras = ', '.join(["'{}'".format(item) for item in listaadministradora])
+
+            sql = (senha.sqlcondominios + ' AND NomeAdm in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
+        else:
+            # string_nomes_administradoras = "'ABRJ ADMINISTRADORA DE BENS'"
+            sql = (senha.sqlcondominios + ' AND NomeAdm in (%s) ORDER BY Codigo;' % retornastrinflistaadm('nomereal'))
+            # sql = (senha.sqlcondominios + ' AND NomeAdm in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
     return sql
 
 
@@ -807,3 +994,15 @@ def extrair_arquivos(caminho_origem, temp_dir):
         return listazips
     else:
         return None
+
+
+def get_files_not_in_list(list_of_files, directory_path):
+    directory_path = directory_path.replace('/', '\\')
+    if os.path.isdir(directory_path):
+        # Obter todos os arquivos pdf na pasta
+        all_pdf_files = glob.glob(os.path.join(directory_path, '*.pdf'))
+
+        # Retornar os arquivos que estão na pasta, mas não estão na lista
+        return [file for file in all_pdf_files if file not in [item['Nome do Arquivo'] for item in list_of_files]]
+    else:
+        return []
