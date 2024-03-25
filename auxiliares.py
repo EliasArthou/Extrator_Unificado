@@ -43,7 +43,7 @@ class Banco:
                 self.cursor = self.conxn.cursor()
                 self.cursor.execute("SELECT 1")
                 self.cursor = self.conxn.cursor()
-                self.engine = pd.io.sql.pandasSQL_builder(self)
+                self.engine = create_engine(f"mssql+pyodbc:///?odbc_connect={self.constr}")
 
         except pyodbc.Error as e:
             self.erro = str(e)
@@ -86,18 +86,18 @@ class Banco:
                     # Consulta para excluir os registros existentes na tabela que têm chaves primárias correspondentes aos registros no dataframe
                     consulta_delete = f"DELETE FROM {tabela} WHERE {colunatabela} IN ({','.join(['?'] * len(df))})"
                     self.cursor.execute(consulta_delete, tuple(df[nome_coluna_df]))
-            df.to_sql(tabela, self.engine, if_exists='append', index=False)
+            # Salvar o dataframe na tabela do banco de dados
+            for _, row in df.iterrows():
+                values = tuple(row)
+                placeholders = ','.join(['?'] * len(values))
+                insert_sql = f"INSERT INTO {tabela} VALUES ({placeholders})"
+                self.cursor.execute(insert_sql, values)
+            # df.to_sql(tabela, self.engine, if_exists='append', index=False)
+
             self.conxn.commit()
+
         except pyodbc.Error as e:
             print("Erro ao inserir DataFrame na tabela:", e)
-            # # Salvar o dataframe na tabela do banco de dados
-            # for _, row in df.iterrows():
-            #     values = tuple(row)
-            #     placeholders = ','.join(['?'] * len(values))
-            #     insert_sql = f"INSERT INTO {tabela} VALUES ({placeholders})"
-            #     self.cursor.execute(insert_sql, values)
-            #
-            # self.conxn.commit()
 
     def executarsql(self, sql):
         try:

@@ -1893,16 +1893,11 @@ def superlogica(objeto, linha):
                             if msgerro is None:
                                 # Operação normal
                                 testalistacondominio = site.verificarobjetoexiste('CSS_SELECTOR', "[class='item-menu lista-condominio']")
-                                # site.delay = 2
-                                # maisitens = site.verificarobjetoexiste('XPATH', '//*[contains(@id, "btn_mais_itens_cobrancas")]')
-                                # while maisitens is not None:
-                                #     maisitens.click()
-                                #     maisitens = site.verificarobjetoexiste('XPATH', '//*[contains(@id, "btn_mais_itens_cobrancas")]')
 
                                 site.delay = delay
 
                                 if testalistacondominio is not None:
-                                    listacondominios = site.verificarobjetoexiste('CSS_SELECTOR', "[href = '#']", itemunico=False)
+                                    listacondominios = site.verificarobjetoexiste('CSS_SELECTOR', "ul.listagem#lista li a", itemunico=False)
                                     achoucondominio = False
                                     for icondominio in listacondominios:
                                         if icondominio.text == linha[Condominio].replace("'", ""):
@@ -1951,7 +1946,6 @@ def superlogica(objeto, linha):
                                                         # Vai para a tela inicial
                                                         site.irparaaba(titulo='Areadocondomino')
                                                         if numeroap.is_displayed():
-
                                                             if numeroap.text.upper() == apartamentobuscado and complementoap.text.upper() == blocobuscado:
                                                                 achouapartamento = True
                                                                 if "Indisponível" not in dadosap.text:
@@ -1997,6 +1991,8 @@ def superlogica(objeto, linha):
                                                                             else:
                                                                                 novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '_' + str(numboleto) + '.pdf'
 
+                                                                            if 'ABRJ' in linha[Administradora].upper():
+                                                                                w=1
                                                                             # Espera o download finalizar e "pega" o arquivo baixado
                                                                             arquivobaixado = os.path.join(site.caminhodownload, site.pegaarquivobaixado(tempoesperadownload))
                                                                             time.sleep(1)
