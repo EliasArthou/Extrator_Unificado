@@ -13,6 +13,7 @@ from datetime import date
 from datetime import datetime
 import datetime as dt
 import messagebox as msg
+from bs4 import BeautifulSoup
 
 Codigo = 0
 NrIPTU = 1
@@ -326,11 +327,12 @@ def extrairnadaconsta(objeto, linha, dataatual=''):
         gerarboleto = not bool(objeto.visual.somentevalores.get())
         if dataatual == '':
             dataatual = aux.hora('America/Sao_Paulo', 'DATA')
+            anoextracao = str(dataatual.year)
 
         site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
 
         codigocliente = linha[Codigo]
-        caminhodestino = objeto.pastadownload + '/' + codigocliente + '_' + linha[NrIPTU] + '.pdf'
+        caminhodestino = objeto.pastadownload + '/' + str(codigocliente) + '_' + str(linha[NrIPTU]) + '.pdf'
 
         # Verifica se o arquivo já existe e se não está pedindo pra pegar as informações do site
         # Se o arquivo existir ele pega as informações do arquivo
@@ -394,6 +396,7 @@ def extrairnadaconsta(objeto, linha, dataatual=''):
 
         if os.path.isfile(caminhodestino):
             df = aux.extrairtextopdf(caminhodestino, 'NADA CONSTA')
+            anoextracao = str(dataatual.year)
             if df is not None:
                 df.insert(loc=0, column='Codigo', value="'" + codigocliente + "'")
                 df.insert(loc=5, column='Arquivo', value="'" + caminhodestino + "'")
@@ -437,10 +440,9 @@ def extraircertidaonegativa(objeto, linha, dataatual=''):
     limitetentativas = 30
     problemacarregamento = False
     resolveu = False
+    textoerro = ''
 
     # try:
-    # gerarboleto = not objeto.var1.get()
-    # salvardadospdf = objeto.var2.get()
     if dataatual == '':
         dataatual = aux.hora('America/Sao_Paulo', 'DATA')
 
@@ -448,22 +450,30 @@ def extraircertidaonegativa(objeto, linha, dataatual=''):
         anoextracao = str(dataatual.year)
 
     codigocliente = linha[Codigo]
-    caminhodestino = objeto.pastadownload + '/certidao_' + codigocliente + '_' + linha[NrIPTU] + '.pdf'
-
-    site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
+    caminhodestino = objeto.pastadownload + '/certidao_' + str(codigocliente) + '_' + str(linha[NrIPTU]) + '.pdf'
 
     objeto.visual.mudartexto('labelstatus', 'Extraindo boleto...')
 
-    # if not os.path.isfile(caminhodestino) or not gerarboleto:
     if not os.path.isfile(caminhodestino):
-        while not problemacarregamento:
-            if site.url != senha.sitecertidaoefipeutica or site is None:
-                if site is not None:
+        while not problemacarregamento and not resolveu:
+            textoerro = ''
+            if site is not None:
+                if site.navegador.current_url != senha.sitecertidaoefipeutica:
                     site.fecharsite()
+                    site = None
+            if site is None:
                 site = web.TratarSite(senha.sitecertidaoefipeutica, senha.nomeprofileIPTU)
                 site.abrirnavegador()
-                # time.sleep(2)
-
+                if site.navegador is not None:
+                    # Use o método find() para encontrar o primeiro objeto com a formatação desejada
+                    pagina = BeautifulSoup(site.navegador.page_source, 'html.parser')
+                    objeto_encontrado = pagina.find(lambda tag: tag.name == 'font' and tag.get('size') == '2' and tag.get('color') == 'red')
+                    if objeto_encontrado:
+                        # Verifica se o objeto contém texto
+                        if objeto_encontrado.text.strip():
+                            textoerro = objeto_encontrado.text.strip()
+                if textoerro != '':
+                    w =1
             if site is not None and site.navegador != -1:
                 if site.url == senha.sitecertidaoefipeutica and site.navegador.title != 'Request Rejected':
                     # Campo de Inscrição da tela Inicial
@@ -471,65 +481,60 @@ def extraircertidaonegativa(objeto, linha, dataatual=''):
                     if inscricao is not None:
                         inscricao.clear()
                         inscricao.send_keys(linha[NrIPTU])
-                        # Campo de Ano de extração
-                        exercicio = site.verificarobjetoexiste('NAME', 'exercicio', anoextracao)
-                        if exercicio is not None:
-                            salvou, baixou = site.baixarimagem('ID', 'img', objeto.pastadownload + '/captcha.png')
-                            if salvou and baixou:
-                                while not resolveu:
-                                    resolveu = site.resolvercaptcha('ID', 'texto_imagem', 'NAME', 'btConsultar')
-                                    if site.navegador.title != 'Request Rejected':
-                                        contartentativas += 1
-                                        if site.verificarobjetoexiste('ID', 'texto_imagem') or site.verificarobjetoexiste('NAME', 'btConsultar') or contartentativas == limitetentativas:
-                                            resolveu = False
-                                            break
-                                    else:
-                                        problemacarregamento = True
+                        salvou, baixou = site.baixarimagem('ID', 'img', objeto.pastadownload + '/captcha.png')
+                        if salvou and baixou:
+                            while not resolveu:
+                                resolveu, textoerro = site.resolvercaptcha('ID', 'texto_imagem', 'NAME', 'btConsultar')
+
+                                if site.navegador.title != 'Request Rejected':
+                                    contartentativas += 1
+                                    delay = site.delay
+                                    site.delay = 2
+                                    if site.verificarobjetoexiste('ID', 'texto_imagem') or site.verificarobjetoexiste('NAME', 'btConsultar') or contartentativas == limitetentativas:
+                                        resolveu = False
                                         break
-                                if not problemacarregamento:
-                                    if resolveu:
-                                        site.delay = 2
-                                        mensagemerro = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_MSG')
-                                        site.delay = 10
-                                        if mensagemerro is None:
-                                            linkdownload = site.verificarobjetoexiste('LINK_TEXT', 'link')
-                                            if linkdownload is not None:
-                                                dadosiptu = [codigocliente, linha[NrIPTU], anoextracao]
-                                                baixado = os.path.join(objeto.pastadownload, site.pegaarquivobaixado(tempoesperadownload, 1))
+                                    site.delay = delay
+                                else:
+                                    problemacarregamento = True
+                                    break
 
-                                                if len(baixado) > 0:
-                                                    caminhodestino = aux.to_raw(caminhodestino)
-                                                    aux.adicionarcabecalhopdf(baixado, caminhodestino, codigocliente, codigobarras=False)
+                                if resolveu:
+                                    site.delay = 2
+                                    mensagemerro = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_MSG')
+                                    site.delay = 10
+                                    if mensagemerro is None:
+                                        botaoimpressao = site.verificarobjetoexiste('ID', 'btimprimir')
+                                        if botaoimpressao is not None:
+                                            arquivos_originais = site.obter_arquivos_atuais(site.caminhodownload)
+                                            botaoimpressao.click()
+                                            arquivobaixado = site.esperar_novo_download(site.caminhodownload, arquivos_originais)
 
-                                            else:
-                                                dadosiptu = [codigocliente, linha[NrIPTU], anoextracao, 'Verificar (Extrair Manualmente)']
+                                            # Verifica se o arquivo baixado de fato existe
+                                            if os.path.isfile(site.caminhodownload + '\\' + arquivobaixado):
+                                                aux.adicionarcabecalhopdf(site.caminhodownload + '\\' + arquivobaixado, caminhodestino, aux.left(codigocliente, 4), posicao_y = 10)
 
                                         else:
-                                            dadosiptu = [codigocliente, linha[NrIPTU], anoextracao, mensagemerro.text]
+                                            dadosiptu = [codigocliente, linha[NrIPTU], anoextracao, 'Verificar (Extrair Manualmente)']
 
                                     else:
-                                        dadosiptu = [codigocliente, linha[NrIPTU], anoextracao, 'Problema Captcha']
+                                        dadosiptu = [codigocliente, linha[NrIPTU], anoextracao, mensagemerro.text]
+
+                                else:
+                                    dadosiptu = [codigocliente, linha[NrIPTU], anoextracao, 'Problema Captcha']
 
     # if os.path.isfile(caminhodestino) and salvardadospdf:
     if os.path.isfile(caminhodestino):
         listacodigo = []
-        listatipopag = []
+        # listatipopag = []
         listaarquivo = []
-        df = aux.extrairtextopdf(caminhodestino)
-        total_rows = df[df.columns[0]].count()
-        for linhatotais in range(total_rows):
-            listacodigo.append("'" + codigocliente + "'")
-            listatipopag.append("'PARCELADO'")
-            listaarquivo.append("'" + caminhodestino + "'")
 
-        df.insert(loc=0, column='Codigo', value=listacodigo)
-        df.insert(loc=4, column='TpoPagto', value=listatipopag)
-        df.insert(loc=5, column='Arquivo', value=listaarquivo)
+        listacodigo.append("'" + codigocliente + "'")
+        listaarquivo.append("'" + caminhodestino + "'")
 
-    if df is None:
-        return dadosiptu
-    else:
-        return dadosiptu, df
+        df = {'Codigo': listacodigo, 'Arquivo': listaarquivo}
+        df = pd.DataFrame(df)
+
+    return dadosiptu, df
 
     # finally:
     #     if site is not None:

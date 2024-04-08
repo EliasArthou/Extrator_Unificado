@@ -358,12 +358,25 @@ class TratarSite:
         if len(str(captcha_text)) != 0:
             captcha = self.verificarobjetoexiste(identificacaocaixa, caixacaptcha, iraoobjeto=True)
             captcha.send_keys(captcha_text)
+            time.sleep(1)
             self.verificarobjetoexiste(identicacaobotao, botao, iraoobjeto=True)
 
             try:
-                mensagemerro = self.retornartabela(3)
-                if mensagemerro == 'Código de Segurança inválido. Favor retornar.':
+                mensagemerro = self.trataralerta()
+                if mensagemerro == '':
+                    # Use o método find() para encontrar o primeiro objeto com a formatação desejada
+                    pagina = BeautifulSoup(self.navegador.page_source, 'html.parser')
+                    objeto_encontrado = pagina.find(lambda tag: tag.name == 'font' and tag.get('size') == '2' and tag.get('color') == 'red')
+                    if objeto_encontrado:
+                        # Verifica se o objeto contém texto
+                        if objeto_encontrado.text.strip():
+                            mensagemerro = objeto_encontrado.text.strip()
+
+                if mensagemerro == 'Código digitado não confere! Favor refazer a consulta!':
                     solver.report_incorrect_image_captcha()
+                    botao_nova_consulta = self.verificarobjetoexiste('XPATH', "//input[@type='button' and @name='bt' and @value='Nova Consulta']")
+                    if botao_nova_consulta is not None:
+                        botao_nova_consulta.click()
                     textoerro = mensagemerro
                     resposta = False
                 else:
@@ -448,7 +461,7 @@ class TratarSite:
 
             case 3:
                 # 4170
-                table = pagina.find('table', {'border': 0, 'cellpadding': 12, 'cellspacing': 1})
+                table = pagina.find('table')
                 itenstabela = table.find_all('td')
                 if len(itenstabela) == 1:
                     for element in itenstabela:

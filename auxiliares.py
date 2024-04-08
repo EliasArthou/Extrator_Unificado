@@ -14,8 +14,7 @@ import pandas as pd
 import win32gui
 import boletos
 from sqlalchemy import create_engine
-from urllib.parse import quote_plus
-
+import openpyxl
 
 caminho = ''
 
@@ -48,6 +47,26 @@ class Banco:
         except pyodbc.Error as e:
             self.erro = str(e)
 
+    def ler_excel(self, caminho_arquivo):
+        # Abre o arquivo Excel
+        workbook = openpyxl.load_workbook(caminho_arquivo)
+
+        # Seleciona a primeira planilha
+        sheet = workbook.active
+
+        # Inicializa uma lista para armazenar os dados do Excel
+        dados_excel = []
+
+        # Itera sobre as linhas da planilha
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            # Converte os valores None para strings vazias
+            row = ["" if value is None else value for value in row]
+            # Adiciona cada linha como uma lista à lista de dados_excel
+            dados_excel.append(list(row))
+
+        # Retorna os dados lidos do Excel como uma lista de listas
+        return dados_excel
+
     def consultar(self, sql):
         self.abrirconexao()
         self.cursor.execute(sql)
@@ -76,12 +95,12 @@ class Banco:
     def adicionardf(self, tabela, df, indicelimpeza=-1):
         try:
             self.abrirconexao()
-    
+
             # Exclui os registros existentes na tabela com base no índice indicado
             if 0 <= indicelimpeza < len(df.columns):
                 nome_coluna_df = df.columns[indicelimpeza]
                 colunatabela = self.obter_nome_coluna_por_indice(tabela, indicelimpeza)
-    
+
                 if colunatabela is not None:
                     # Consulta para excluir os registros existentes na tabela que têm chaves primárias correspondentes aos registros no dataframe
                     consulta_delete = f"DELETE FROM {tabela} WHERE {colunatabela} IN ({','.join(['?'] * len(df))})"
@@ -92,7 +111,7 @@ class Banco:
                 placeholders = ','.join(['?'] * len(values))
                 insert_sql = f"INSERT INTO {tabela} VALUES ({placeholders})"
                 self.cursor.execute(insert_sql, values)
-            # df.to_sql(tabela, self.engine, if_exists='append', index=False)
+            # df.to_sql(tabela, self.conxn, if_exists='append', index=False)
 
             self.conxn.commit()
 
@@ -116,6 +135,7 @@ class Banco:
             self.cursor.close()
         if self.conxn:
             self.conxn.close()
+
 
 # class Banco:
 #     """
@@ -748,7 +768,7 @@ def timezones_disponiveis():
     return timezones
 
 
-def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, centralizado=False, codigobarras=True):
+def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, centralizado=False, codigobarras=True, posicao_x = 0, posicao_y = 0):
     import fitz
 
     tempoespera = 0
@@ -776,13 +796,15 @@ def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, centralizado=False
                         # Cálculo de meio da página
                         largura_pagina = pg.mediabox_size.y
                         # Verifica o tamanho do texto considerando a fonte informada na variável "fonte" no início da função
-                        largura_texto = fonte.text_length(cabecalho, 10)
+                        largura_texto = fonte.text_length(cabecalho, 12)
                         if not centralizado:
                             deslocamento_direita = 30
                         else:
                             deslocamento_direita = -30
-                        posicao_x = (largura_pagina - largura_texto) / 2 + deslocamento_direita
-                        posicao_y = 20
+                        if posicao_x == 0:
+                            posicao_x = (largura_pagina - largura_texto) / 2 + deslocamento_direita
+                        if posicao_y == 0:
+                            posicao_y = 20
                         # Insere o cabeçalho no meio da página
                         pg.insert_text((posicao_x, posicao_y), cabecalho, fontsize=10, color=(0, 0, 0), fontfile=fonte)
                         # Para o FOR porque só quero o cabeçalho na primeira página

@@ -43,12 +43,12 @@ class Extrator:
 
         if os.path.isfile(os.path.join(aux.caminhoprojeto(), 'Scai.WMB')):
             caminhobanco = aux.caminhoselecionado(titulojanela='Selecione o arquivo de banco de dados:',
-                                                  tipoarquivos=[('Banco ' + senha.empresa, '*.WMB'), ('Todos os Arquivos:', '*.*')],
+                                                  tipoarquivos=[('Banco ' + senha.empresa, '*.WMB'), ('Arquivos Excel', '*.xlsx'), ('Todos os Arquivos:', '*.*')],
                                                   caminhoini=aux.caminhoprojeto(), arquivoinicial='Scai.WMB')
         else:
             if os.path.isdir(aux.caminhoprojeto()):
                 caminhobanco = aux.caminhoselecionado(titulojanela='Selecione o arquivo de banco de dados:',
-                                                      tipoarquivos=[('Banco ' + senha.empresa, '*.WMB'), ('Todos os Arquivos:', '*.*')],
+                                                      tipoarquivos=[('Banco ' + senha.empresa, '*.WMB'), ('Arquivos Excel', '*.xlsx'), ('Todos os Arquivos:', '*.*')],
                                                       caminhoini=aux.caminhoprojeto())
             else:
                 caminhobanco = aux.caminhoselecionado(titulojanela='Selecione o arquivo de banco de dados:',
@@ -63,7 +63,7 @@ class Extrator:
             self.pastadownload = aux.caminhoselecionado(3, 'Selecione o caminho dos arquivos:', caminhoini=self.pastadownload)
 
         self.resposta = str(self.visual.tipopagamento.get())
-        if self.visual.tipoextracao.get() != 'Condomínios':
+        if self.visual.tipoextracao.get() != 'Condomínios' and caminhobanco[-4:].lower() != 'xlsx':
             self.indicecliente = aux.criarinputbox('Cliente de Corte', 'Iniciar a partir de um cliente? (0 fará de todos da lista)', valorinicial='0')
         else:
             self.indicecliente = '0'
@@ -98,7 +98,7 @@ class Extrator:
                 if self.bd is None:
                     self.bd = aux.Banco(caminhobanco)
 
-                if self.visual.iniciodomes:
+                if self.visual.iniciodomes.get():
                     self.bd.executarsql('DELETE * FROM BoletosCondominios')
 
                 self.sql = aux.retornarlistaboletos()
@@ -109,11 +109,15 @@ class Extrator:
             self.bd = aux.Banco(caminhobanco)
 
         if len(str(self.indicecliente)) > 0:
-            self.indicecliente = str(self.indicecliente).zfill(4)
-            if self.indicecliente == '0000' or self.visual.tiposervico.get() != 'IPTU':
-                self.resultado = self.bd.consultar(self.sql)
+            if caminhobanco[-4:].lower() != 'xlsx':
+                self.indicecliente = str(self.indicecliente).zfill(4)
+                if self.indicecliente == '0000' or self.visual.tiposervico.get() != 'IPTU':
+                    self.resultado = self.bd.consultar(self.sql)
+                else:
+                    self.resultado = self.bd.consultar(self.sql.replace(';', ' ') + "WHERE Codigo >= '{codigo}' ORDER BY Codigo;".format(codigo=self.indicecliente))
             else:
-                self.resultado = self.bd.consultar(self.sql.replace(';', ' ') + "WHERE Codigo >= '{codigo}' ORDER BY Codigo;".format(codigo=self.indicecliente))
+                # Lendo o arquivo Excel e transformando-o em um DataFrame
+                self.resultado = self.bd.ler_excel(caminhobanco)
 
             if self.resultado:
                 self.resultado.sort(key=lambda x: x[0])
@@ -433,13 +437,6 @@ class Extrator:
         #     msg.msgbox("Erro! Log salvo em: " + "Log_" + aux.acertardataatual() + ".txt", msg.MB_OK, 'Erro')
 
     def extrairboletos(self):
-        """
-
-        : param caminhobanco: caminho do banco para realizar a pesquisa.
-        : param resposta: opção selecionada de extração.
-        : param visual: janela a ser manipulada.
-        """
-
         df = None
         dadosiptu = None
         linhatemp = []
@@ -469,14 +466,24 @@ class Extrator:
                     self.listachaves = ['Código Cliente', 'Inscrição', 'Guia do Exercício', 'Nr Guia', 'Valor', 'Contribuinte', 'Endereço', 'Status']
                     dadosiptu, df = Biptu.extrairboletos(self, linha)
                     if df is not None:
-                        self.bd.adicionardf('Codigos IPTUs', df, 7)
+                        # Remover as aspas simples de todos os valores do DataFrame
+                        df = df.applymap(lambda x: x.replace("'", "") if isinstance(x, str) else x)
+                        # Remover vírgulas dos valores e substituir ponto por vírgula
+                        df['Valor Total'] = df['Valor Total'].str.replace('.', '').str.replace(',', '.')
+                        # Remover as aspas dos valores
+                        # df['Valor Total'] = df['Valor Total'].str.replace("'", "")
+                        # Converter a coluna 'Valor Total' para tipo float para representar valores monetários
+                        df['Valor Total'] = df['Valor Total'].astype('float')
+                        # Remover as aspas dos valores
+                        df['Parcela'] = df['Parcela'].str.replace("'", "")
+                        df['Parcela'] = df['Parcela'].astype(int)
+                        self.bd.adicionardf('[Codigos IPTUs]', df, 7)
                 case 'Nada Consta':
                     self.listachaves = ['Código Cliente', 'Inscrição', 'Guia do Exercício', 'Status']
                     dadosiptu, df = Biptu.extrairnadaconsta(self, linha, dataatual)
                 case 'Certidão Negativa':
                     dadosiptu, df = Biptu.extraircertidaonegativa(self, linha, dataatual)
                     # self.extrairboletosiptu()
-                    print('Teste')
 
             if len(dadosiptu) > 0:
                 self.listadados.extend(sublist for sublist in dadosiptu)

@@ -486,8 +486,8 @@ def bap(objeto, linha):
                         if len(boletos) > 0:
                             for i, boleto in enumerate(boletos, start=1):
                                 # Clica no botão de boleto
-                                boleto.click()
-
+                                boletos[i-1].click()
+                                time.sleep(4)
                                 quantaba = site.num_abas()
                                 if quantaba > 1:
                                     site.irparaaba(2)
@@ -497,25 +497,27 @@ def bap(objeto, linha):
                                         site.fecharaba(2)
                                     site.delay = delay
                                 else:
-                                    # Define que o nome do arquivo ficará
-                                    if i == 1:
-                                        novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '.pdf')
-                                    else:
-                                        novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + str(i) + '.pdf')
-                                    time.sleep(1)
+                                    # Espera o download finalizar
+                                    site.esperadownloads(site.caminhodownload, timeout)
 
-                                    # Espera o download finalizar e "pega" o arquivo baixado (Espera o download pela página download do chrome)
-                                    arquivobaixado = os.path.join(site.caminhodownload, site.pegaarquivobaixado(tempoesperadownload, 1))
+                                    # Define o nome (baseado no nr do boleto)
+                                    if numboleto == 0:
+                                        novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '.pdf'
+                                    else:
+                                        novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '_' + str(numboleto) + '.pdf'
+
+                                    # Espera o download finalizar e "pega" o arquivo baixado
+                                    arquivobaixado = os.path.join(site.caminhodownload, site.pegaarquivobaixado(tempoesperadownload))
+                                    time.sleep(1)
 
                                     # Verifica se o arquivo baixado de fato existe
                                     if os.path.isfile(arquivobaixado):
-                                        # Move o arquivo para o caminho escolhido adicionando o cabeçalho
-                                        listaboletos.append(aux.adicionarcabecalhopdf(arquivobaixado, novonomearquivo, aux.left(linha[identificador], 4)))
-                                        # Verifica se o arquivo foi gerado
-                                        if os.path.isfile(novonomearquivo):
-                                            numboleto += 1
-                                            time.sleep(1)
-
+                                        # Renomeia o arquivo baixado para o código de cliente
+                                        listaboletos.append(aux.adicionarcabecalhopdf(arquivobaixado, novonomearquivo, linha[identificador]))
+                                        numboleto += 1
+                                        time.sleep(1)
+                                site.irparaaba(1)
+                                boletos = site.verificarobjetoexiste('LINK_TEXT', 'Gerar', itemunico=False)
                         # Retorna resposta na linha
                         linha[Resposta] = respostapadrao(numboleto)
 
@@ -1418,30 +1420,55 @@ def livefacilities(objeto, linha):
                                         if frame is not None:
                                             site.irparaframe(frame)
                                             # Botão Imprimir
-                                            botaoimprimir = site.verificarobjetoexiste('ID', 'print')
+                                            botaoimprimir = site.verificarobjetoexiste('ID', 'open-button')
                                             if botaoimprimir is not None:
                                                 time.sleep(2)
                                                 # Aperta o botão de impressão
                                                 botaoimprimir.click()
-                                                # Define que o nome do arquivo ficará
-                                                if i == 0:
-                                                    novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '.pdf')
-                                                else:
-                                                    novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + str(i + 1) + '.pdf')
-                                                time.sleep(2)
+
                                                 # Espera o download finalizar
-                                                site.esperadownloads(objeto.pastadownload, timeout)
+                                                site.esperadownloads(site.caminhodownload, timeout)
+
+                                                # Define o nome (baseado no nr do boleto)
+                                                if numboleto == 0:
+                                                    novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '.pdf'
+                                                else:
+                                                    novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '_' + str(numboleto) + '.pdf'
+
                                                 # Espera o download finalizar e "pega" o arquivo baixado
-                                                arquivobaixado = aux.ultimoarquivo(objeto.pastadownload, 'pdf')
+                                                arquivobaixado = os.path.join(site.caminhodownload, site.pegaarquivobaixado(tempoesperadownload))
+                                                time.sleep(1)
 
                                                 # Verifica se o arquivo baixado de fato existe
                                                 if os.path.isfile(arquivobaixado):
-                                                    # Move o arquivo para o caminho escolhido
-                                                    listaboletos.append(aux.adicionarcabecalhopdf(arquivobaixado, novonomearquivo, aux.left(linha[identificador], 4)))
-                                                    # Verifica se o arquivo foi gerado
-                                                    if os.path.isfile(novonomearquivo):
-                                                        numboleto += 1
+                                                    # Renomeia o arquivo baixado para o código de cliente
+                                                    listaboletos.append(aux.adicionarcabecalhopdf(arquivobaixado, novonomearquivo, linha[identificador]))
+                                                    numboleto += 1
+                                                    time.sleep(1)
 
+
+
+
+
+                                                # # Define que o nome do arquivo ficará
+                                                # if i == 0:
+                                                #     novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '.pdf')
+                                                # else:
+                                                #     novonomearquivo = os.path.join(objeto.pastadownload, aux.left(linha[identificador], 4) + '_' + str(i + 1) + '.pdf')
+                                                # time.sleep(2)
+                                                # # Espera o download finalizar
+                                                # site.esperadownloads(objeto.pastadownload, timeout)
+                                                # # Espera o download finalizar e "pega" o arquivo baixado
+                                                # arquivobaixado = aux.ultimoarquivo(objeto.pastadownload, 'pdf')
+                                                #
+                                                # # Verifica se o arquivo baixado de fato existe
+                                                # if os.path.isfile(arquivobaixado):
+                                                #     # Move o arquivo para o caminho escolhido
+                                                #     listaboletos.append(aux.adicionarcabecalhopdf(arquivobaixado, novonomearquivo, aux.left(linha[identificador], 4)))
+                                                #     # Verifica se o arquivo foi gerado
+                                                #     if os.path.isfile(novonomearquivo):
+                                                #         numboleto += 1
+                                        site.irparaaba(1)
                                         site.navegador.refresh()
                                         time.sleep(2)
                                         objetosboletos = site.verificarobjetoexiste('XPATH', '//a[contains(@title,"Abrir Boleto")]', itemunico=False)
