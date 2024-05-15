@@ -650,6 +650,7 @@ class TratarSite:
                 return dffiltrado
         else:
             raise ValueError("Nenhum filtro fornecido!")
+
     def encontrar_input_oculto(self, identificador, endereco, buscar_em_iframes=False):
         """
         Encontra um elemento input oculto e retorna o objeto WebElement.
