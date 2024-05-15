@@ -486,7 +486,7 @@ def bap(objeto, linha):
                         if len(boletos) > 0:
                             for i, boleto in enumerate(boletos, start=1):
                                 # Clica no botão de boleto
-                                boletos[i-1].click()
+                                boletos[i - 1].click()
                                 time.sleep(4)
                                 quantaba = site.num_abas()
                                 if quantaba > 1:
@@ -660,7 +660,6 @@ def cipa(objeto, linha):
     linha[Nomefuncao] = __name__
     try:
         # Variável que vai retornar a quantidade de boletos
-
         numboleto = 0
         linha[ProblemaLogin] = False
         achouapartamento = False
@@ -741,6 +740,7 @@ def cipa(objeto, linha):
                                             barrapesquisa = site.verificarobjetoexiste('ID', "mat-input-2")
                                             time.sleep(2)
                                             if barrapesquisa is not None:
+
                                                 barrapesquisa.send_keys(linha[Condominio])
                                                 botaopesquisa = site.verificarobjetoexiste('XPATH',
                                                                                            "/html/body/app-root/ion-content/layout/app-layout/div/div[2]/div/condominium-list/div/div/div[2]/div/button/span[1]")
@@ -749,6 +749,14 @@ def cipa(objeto, linha):
                                                     time.sleep(3)
                                                     icondominio = site.verificarobjetoexiste('XPATH',
                                                                                              '/html/body/app-root/ion-content/layout/app-layout/div/div[2]/div/condominium-list/div/div/div[3]/div/div/div')
+
+                                                    if icondominio is None:
+                                                        barrapesquisa.clear()
+                                                        site.navegador.refresh()
+                                                        listacondominios = site.verificarobjetoexiste('CSS_SELECTOR', '.text-md.font-semibold.leading-tight', itemunico=False)
+                                                        if listacondominios is not None:
+                                                            textoretornado, percentualretornado, icondominio = site.buscar_por_proximidade(listacondominios, linha[Condominio], 'text')
+
                                                     if icondominio is not None:
                                                         # Entra no condomínio selecionado
                                                         site.navegador.execute_script("arguments[0].click()", icondominio)
@@ -893,7 +901,6 @@ def cipa(objeto, linha):
     except Exception as e:
         linha[Resposta] = str(e)
         linha[CheckErro] = True
-
 
     finally:
         linha[Nomefuncao] = inspect.currentframe().f_code.co_name
@@ -1426,6 +1433,7 @@ def livefacilities(objeto, linha):
                                                 # Aperta o botão de impressão
                                                 botaoimprimir.click()
 
+                                                time.sleep(2)
                                                 # Espera o download finalizar
                                                 site.esperadownloads(site.caminhodownload, timeout)
 
@@ -1445,10 +1453,6 @@ def livefacilities(objeto, linha):
                                                     listaboletos.append(aux.adicionarcabecalhopdf(arquivobaixado, novonomearquivo, linha[identificador]))
                                                     numboleto += 1
                                                     time.sleep(1)
-
-
-
-
 
                                                 # # Define que o nome do arquivo ficará
                                                 # if i == 0:
@@ -1558,7 +1562,7 @@ def nacional(objeto, linha):
                                 botao2via.click()
 
                                 # Vai para o frame de boletos
-                                frameboletos = site.verificarobjetoexiste('NAME', 'principal')
+                                frameboletos = site.verificarobjetoexiste('NAME', 'principal', buscar_em_iframes=True)
                                 if frameboletos is not None:
                                     # Vai para os frames do boleto
                                     site.irparaframe(frameboletos)
@@ -2018,8 +2022,6 @@ def superlogica(objeto, linha):
                                                                             else:
                                                                                 novonomearquivo = objeto.pastadownload + '\\' + linha[identificador] + '_' + str(numboleto) + '.pdf'
 
-                                                                            if 'ABRJ' in linha[Administradora].upper():
-                                                                                w=1
                                                                             # Espera o download finalizar e "pega" o arquivo baixado
                                                                             arquivobaixado = os.path.join(site.caminhodownload, site.pegaarquivobaixado(tempoesperadownload))
                                                                             time.sleep(1)

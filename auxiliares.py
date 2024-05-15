@@ -103,17 +103,29 @@ class Banco:
 
                 if colunatabela is not None:
                     # Consulta para excluir os registros existentes na tabela que têm chaves primárias correspondentes aos registros no dataframe
-                    consulta_delete = f"DELETE FROM {tabela} WHERE {colunatabela} IN ({','.join(['?'] * len(df))})"
-                    self.cursor.execute(consulta_delete, tuple(df[nome_coluna_df]))
+                    # consulta_delete = f"DELETE FROM {tabela} WHERE {colunatabela} IN ({','.join(['?'] * len(df))})"
+                    # self.cursor.execute(consulta_delete, tuple(df[nome_coluna_df]))
+                    # A df[nome_coluna_df] contêm os valores que quero excluir
+                    valores_unicos = tuple(df[nome_coluna_df].unique())  # Isso garante que cada valor seja único
+                    placeholders = ','.join(['?'] * len(valores_unicos))  # Cria um placeholder para cada valor único
+
+                    consulta_delete = f"DELETE FROM {tabela} WHERE {colunatabela} IN ({placeholders})"
+                    self.cursor.execute(consulta_delete, valores_unicos)
+
             # Salvar o dataframe na tabela do banco de dados
-            for _, row in df.iterrows():
+            for index, row in df.iterrows():
                 values = tuple(row)
                 placeholders = ','.join(['?'] * len(values))
                 insert_sql = f"INSERT INTO {tabela} VALUES ({placeholders})"
-                self.cursor.execute(insert_sql, values)
-            # df.to_sql(tabela, self.conxn, if_exists='append', index=False)
+                try:
+                    self.cursor.execute(insert_sql, values)
+                    self.conxn.commit()
+                except Exception as e:
+                    print(f"Erro ao inserir a linha {index}: {row}")
+                    print(f"Detalhe do erro: {e}")
+                    self.conxn.rollback()
 
-            self.conxn.commit()
+                    # df.to_sql(tabela, self.conxn, if_exists='append', index=False)
 
         except pyodbc.Error as e:
             print("Erro ao inserir DataFrame na tabela:", e)
@@ -135,6 +147,29 @@ class Banco:
             self.cursor.close()
         if self.conxn:
             self.conxn.close()
+
+
+def numero_para_romano(numero):
+    valores = [
+        1000, 900, 500, 400,
+        100, 90, 50, 40,
+        10, 9, 5, 4,
+        1
+    ]
+    simbolos = [
+        "M", "CM", "D", "CD",
+        "C", "XC", "L", "XL",
+        "X", "IX", "V", "IV",
+        "I"
+    ]
+    romano = ''
+    i = 0
+    while numero > 0:
+        for _ in range(numero // valores[i]):
+            romano += simbolos[i]
+            numero -= valores[i]
+        i += 1
+    return romano
 
 
 # class Banco:
@@ -796,7 +831,7 @@ def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, centralizado=False
                         # Cálculo de meio da página
                         largura_pagina = pg.mediabox_size.y
                         # Verifica o tamanho do texto considerando a fonte informada na variável "fonte" no início da função
-                        largura_texto = fonte.text_length(cabecalho, 12)
+                        largura_texto = fonte.text_length(cabecalho, 15)
                         if not centralizado:
                             deslocamento_direita = 30
                         else:

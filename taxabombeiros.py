@@ -67,9 +67,13 @@ def taxabombeiro(objeto, linha):
 
                     if site is not None and site.navegador != -1:
                         # Campo de Inscrição da tela Inicial
-                        inscricao = site.verificarobjetoexiste('NAME', 'num_cbmerj')
+                        inscricao = site.verificarobjetoexiste('NAME', 'cbmerj')
                         # Campo de dígito verificador
-                        dv = site.verificarobjetoexiste('NAME', 'dv_cbmerj')
+                        dv = site.verificarobjetoexiste('NAME', 'cbmerj_dv')
+                        # Elemento da chave do captcha
+                        elementocaptcha = site.verificarobjetoexiste('ID', 'recaptcha-token')
+                        # Elemento preenchido para a resposta do captcha
+                        respostacaptcha = site.verificarobjetoexiste('ID', 'g-recaptcha-response')
                         # Testa se tem os dois campos supracitados
                         if inscricao is not None and dv is not None:
                             # "Limpa" o campo de inscrição

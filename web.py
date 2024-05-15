@@ -1,22 +1,26 @@
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from fuzzywuzzy import fuzz
+from a_selenium2df import get_df
+from undetected_chromedriver import Chrome, ChromeOptions
 import io
 from PIL import Image
 import os
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 from anticaptchaofficial.imagecaptcha import *
+from anticaptchaofficial.recaptchav2proxyless import *
 import auxiliares as aux
 from bs4 import BeautifulSoup
 import messagebox
 import sensiveis as senhas
-from subprocess import CREATE_NO_WINDOW
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import Select
 import time
+import pandas as pd
 
 
 class TratarSite:
@@ -28,6 +32,7 @@ class TratarSite:
         self.url = url
         self.perfil = nomeperfil
         self.navegador = None
+        self.dataframepagina = None
         self.options = None
         self.delay = 10
         self.caminho = ''
@@ -62,7 +67,7 @@ class TratarSite:
             time.sleep(1)
             return self.navegador
 
-    def configuraprofilechrome(self, ableprintpreview=True, openpdf=True):
+    def configuraprofilechrome(self, ableprintpreview=True, openpdf=True, navegarincognito=False):
         """
         Configura usuário e opções no navegador aberto para execução
         return: o navegador configurado para iniciar a execução das rotinas
@@ -98,19 +103,17 @@ class TratarSite:
             'savefile.default_directory': self.caminhodownload
         }
 
-        self.options = webdriver.ChromeOptions()
+        self.options = ChromeOptions()
 
         if aux.caminhoprojeto('Profile') != '':
-            # self.options.add_argument(f"user-data-dir={aux.caminhoprojeto('Downloads')+'\\'}" )
             self.options.add_argument("--start-maximized")
-            self.options.add_argument("--disable-infobars")
-            self.options.add_argument("--disable-features=ChromeWhatsNewUI")
-            # self.options.add_argument("--print-to-pdf="+aux.caminhoprojeto('Downloads'))
             self.options.add_experimental_option('prefs', prefs)
-            # Adding argument to disable the AutomationControlled flag
-            self.options.add_argument("--disable-blink-features=AutomationControlled")
-            self.options.add_experimental_option('excludeSwitches', ["enable-automation"])
-            self.options.add_experimental_option('useAutomationExtension', False)
+            self.options.add_argument("--disable-popup-blocking")
+            self.options.add_argument("--disable-infobars")
+            self.options.add_argument("--disable-notifications")
+            self.options.add_argument('--disable-extensions')
+            self.options.add_argument('--disable-plugins')
+
             if ableprintpreview:
                 self.options.add_argument('--kiosk-printing')
             else:
@@ -122,10 +125,19 @@ class TratarSite:
             # Forma invisível
             # self.options.add_argument("--headless")
 
-        chrome_service = Service(ChromeDriverManager().install())
-        chrome_service.creationflags = CREATE_NO_WINDOW
+        if navegarincognito:
+            driver = Chrome(options=self.options)
+            driver.maximize_window()
+        else:
+            self.options.add_argument("--disable-features=ChromeWhatsNewUI")
+            # Adding argument to disable the AutomationControlled flag
+            self.options.add_argument("--disable-blink-features=AutomationControlled")
+            self.options.add_experimental_option('excludeSwitches', ["enable-automation"])
+            self.options.add_experimental_option('useAutomationExtension', False)
+            chrome_service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(options=self.options, service=chrome_service)
 
-        return webdriver.Chrome(options=self.options, service=chrome_service)
+        return driver
 
     def verificarobjetoexiste(self, identificador, endereco, valorselecao='', itemunico=True, iraoobjeto=False, sotestar=False, buscar_em_iframes=False):
         """
@@ -399,16 +411,14 @@ class TratarSite:
 
         return resposta, textoerro
 
-    def resolvecaptchatipo2(self):
+    def resolvecaptchatipo2(self, chavecaptcha):
         from anticaptchaofficial import recaptchav2proxyless
 
-        chavesite = '6LdZ1EQkAAAAAAKRMr1Dhld-8WiyW5Qt0HgCXyfa'
-
-        solver = recaptchav2proxyless()
+        solver = recaptchaV2Proxyless()
         solver.set_verbose(1)
         solver.set_key(senhas.chaveanticaptcha)
         solver.set_website_url(self.navegador.current_url)
-        solver.set_website_key(chavesite)
+        solver.set_website_key(chavecaptcha)
         # set optional custom parameter which Google made for their search page Recaptcha v2
         # solver.set_data_s('"data-s" token from Google Search results "protection"')
 
@@ -418,9 +428,10 @@ class TratarSite:
 
         g_response = solver.solve_and_return_solution()
         if g_response != 0:
-            print("g-response: " + g_response)
+            return g_response
         else:
             print("task finished with error " + solver.error_code)
+            return None
 
     def retornartabela(self, tipolista):
         import re
@@ -585,3 +596,107 @@ class TratarSite:
                     time.sleep(1)
                     if time.time() > endTime:
                         break
+
+    def retornarpaginaemdf(self):
+        self.dataframepagina = get_df(self.navegador, By, WebDriverWait, EC, queryselector='*', with_methods=True)
+
+    def buscarobjetoemdf(self, filtros: dict, atributo: str = None):
+        """
+        Busca objetos em um dataframe com base em filtros e retorna o resultado.
+        Args:
+            filtros (dict): Dicionário de filtros com chave-valor.
+            atributo (str, optional): Atributo específico a ser retornado. Defaults to None.
+        Returns:
+            pd.DataFrame | list | str | None: Resultado da busca.
+        """
+        if self.dataframepagina is None:
+            raise ValueError("Dataframe não iniciado!")
+
+        df = self.dataframepagina
+        query_conditions = []
+
+        for key, value in filtros.items():
+            identificador = f"aa_{key}" if "_" not in key else key
+            match value:
+                case '^NaN':
+                    condition = f"({identificador}.notna())"
+                case value if pd.isna(value):
+                    condition = f"({identificador}.isna())"
+                case _:
+                    if df[identificador].dtype == 'string' or df[identificador].dtype == 'object':
+                        # query_conditions.append(f"({identificador} == '{value}')")
+                        condition = f"({identificador} == '{value}')"
+                    else:
+                        # query_conditions.append(f"({identificador} == {value})")
+                        condition = f"({identificador} == {value})"
+
+            query_conditions.append(condition)
+
+        if query_conditions:
+            query_string = " & ".join(query_conditions)
+            dffiltrado = df.query(query_string)
+
+            if atributo:
+                if "_" not in atributo:
+                    atributo = f"aa_{atributo}"
+                if atributo in dffiltrado.columns:
+                    if len(dffiltrado) == 1:
+                        return dffiltrado[atributo].iloc[0]
+                    else:
+                        return dffiltrado[atributo].tolist()
+                else:
+                    raise ValueError(f"Atributo '{atributo}' não encontrado no DataFrame.")
+            else:
+                return dffiltrado
+        else:
+            raise ValueError("Nenhum filtro fornecido!")
+    def encontrar_input_oculto(self, identificador, endereco, buscar_em_iframes=False):
+        """
+        Encontra um elemento input oculto e retorna o objeto WebElement.
+        :param identificador: str - Método de identificação do elemento (ID, NAME, CLASS_NAME, TAG_NAME, etc.).
+        :param endereco: str - Valor do identificador (por exemplo, o ID real do elemento).
+        :param buscar_em_iframes: bool - Se deve buscar o elemento em iframes.
+        :return: WebElement ou None - O objeto WebElement do elemento input oculto, ou None se não for encontrado.
+        """
+        try:
+            # Tenta encontrar o elemento na página principal primeiro
+            hidden_input = self.navegador.find_element(getattr(By, identificador), endereco)
+            print(hidden_input.get_attribute('value'))
+            return hidden_input
+        except NoSuchElementException:
+            # Se não encontrar na página principal e buscar_em_iframes for True, busca nos iframes
+            if buscar_em_iframes:
+                iframes = self.navegador.find_elements(By.TAG_NAME, 'iframe')
+                original_window = self.navegador.current_window_handle
+                for iframe in iframes:
+                    try:
+                        self.navegador.switch_to.frame(iframe)
+                        hidden_input = self.navegador.find_element(getattr(By, identificador), endereco)
+                        print(hidden_input.get_attribute('value'))
+                        return hidden_input
+                    except NoSuchElementException:
+                        continue
+                    finally:
+                        self.navegador.switch_to.window(original_window)  # Garante que volta para o conteúdo principal após cada tentativa
+        return None  # Retorna None se o elemento não for encontrado em lugar nenhum
+
+    @staticmethod
+    def buscar_por_proximidade(lista, texto_de_busca, prop=None, corte_perc=1):
+        texto_mais_parecido = ''
+        percentual_de_compatibilidade = 0
+        item_lista = None
+
+        for elemento in lista:
+            if prop is None:
+                texto_elemento = elemento
+            else:
+                texto_elemento = getattr(elemento, prop)
+
+            compatibilidade = fuzz.ratio(texto_de_busca, texto_elemento)
+
+            if compatibilidade > percentual_de_compatibilidade and compatibilidade >= corte_perc:
+                texto_mais_parecido = texto_elemento
+                percentual_de_compatibilidade = compatibilidade
+                item_lista = elemento
+
+        return texto_mais_parecido, percentual_de_compatibilidade, item_lista
