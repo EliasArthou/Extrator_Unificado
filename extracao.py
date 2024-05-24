@@ -90,7 +90,7 @@ class Extrator:
                 self.sql = senha.sqlcbm
 
             case 'Prefeitura':
-                if bool(self.visual.faltantes) and self.visual.tiposervico.get() == 'IPTU':
+                if bool(self.visual.faltantes):  # and self.visual.tiposervico.get() == 'IPTU':
                     self.sql = senha.sqliptufaltante
                 else:
                     self.sql = senha.sqliptucompleto
@@ -112,7 +112,7 @@ class Extrator:
         if len(str(self.indicecliente)) > 0:
             if caminhobanco[-4:].lower() != 'xlsx':
                 self.indicecliente = str(self.indicecliente).zfill(4)
-                if self.indicecliente == '0000' or self.visual.tiposervico.get() != 'IPTU':
+                if self.indicecliente == '0000' or self.visual.tipoextracao.get() != 'Prefeitura':  # or self.visual.tiposervico.get() != 'IPTU':
                     self.resultado = self.bd.consultar(self.sql)
                 else:
                     self.resultado = self.bd.consultar(self.sql.replace(';', ' ') + "WHERE Codigo >= '{codigo}' ORDER BY Codigo;".format(codigo=self.indicecliente))
@@ -133,7 +133,6 @@ class Extrator:
                 self.extrairboletos()
 
             case 'Condomínios':
-
                 self.extraircondominio()
 
             case _:
