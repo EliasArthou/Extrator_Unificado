@@ -90,7 +90,7 @@ class Extrator:
                 self.sql = senha.sqlcbm
 
             case 'Prefeitura':
-                if bool(self.visual.faltantes):  # and self.visual.tiposervico.get() == 'IPTU':
+                if bool(self.visual.faltantes) and self.visual.tiposervico.get() == 'IPTU':
                     self.sql = senha.sqliptufaltante
                 else:
                     self.sql = senha.sqliptucompleto
@@ -112,7 +112,7 @@ class Extrator:
         if len(str(self.indicecliente)) > 0:
             if caminhobanco[-4:].lower() != 'xlsx':
                 self.indicecliente = str(self.indicecliente).zfill(4)
-                if self.indicecliente == '0000' or self.visual.tipoextracao.get() != 'Prefeitura':  # or self.visual.tiposervico.get() != 'IPTU':
+                if self.indicecliente == '0000' or self.extracao != 'Prefeitura':
                     self.resultado = self.bd.consultar(self.sql)
                 else:
                     self.resultado = self.bd.consultar(self.sql.replace(';', ' ') + "WHERE Codigo >= '{codigo}' ORDER BY Codigo;".format(codigo=self.indicecliente))
@@ -133,6 +133,7 @@ class Extrator:
                 self.extrairboletos()
 
             case 'Condomínios':
+
                 self.extraircondominio()
 
             case _:
@@ -179,7 +180,7 @@ class Extrator:
 
         for indice, linha in enumerate(self.resultado):
             resolveucaptcha = False
-            if aux.hora('America/Sao_Paulo', 'HORA') < datetime.time(22, 00, 00) and self.texto != 'Este serviço encontra-se temporariamente indisponível.':
+            if aux.hora('America/Sao_Paulo', 'HORA') < datetime.time(23, 59, 00) and self.texto != 'Este serviço encontra-se temporariamente indisponível.':
                 codigocliente = linha[Biptu.Codigo]
                 # ==================== Parte Gráfica =======================================================
                 self.visual.mudartexto('labelcodigocliente', 'Código Cliente: ' + codigocliente)
@@ -194,7 +195,7 @@ class Extrator:
                 time.sleep(0.1)
                 self.texto = ''
                 # Verifica a hora para entrar no site, caso esteja fora do horário válido, nem inicia
-                if aux.hora('America/Sao_Paulo', 'HORA') < datetime.time(22, 00, 00):
+                if aux.hora('America/Sao_Paulo', 'HORA') < datetime.time(23, 59, 00):
                     dadosiptu, df = Biptu.extrairbombeiros(self, linha, aux.hora('America/Sao_Paulo', 'DATA'))
 
             else:

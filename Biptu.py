@@ -582,7 +582,7 @@ def extrairbombeiros(objeto, linha, dataatual=''):
     objeto.visual.mudartexto('labelstatus', 'Extraindo boleto...')
 
     if not os.path.isfile(caminhodestino):
-        while not resolveucaptcha and aux.hora('America/Sao_Paulo', 'HORA') < dt.time(22, 00, 00):
+        while not resolveucaptcha and aux.hora('America/Sao_Paulo', 'HORA') < dt.time(23, 59, 00):
             # Variável que vai receber o texto de erro do site (caso exista)
             texto = ''
             # Verifica a hora para entrar no site, caso esteja fora do horário válido, nem inicia
