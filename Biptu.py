@@ -582,11 +582,21 @@ def extrairbombeiros(objeto, linha, dataatual=''):
     objeto.visual.mudartexto('labelstatus', 'Extraindo boleto...')
 
     if not os.path.isfile(caminhodestino):
-        while not resolveucaptcha and aux.hora('America/Sao_Paulo', 'HORA') < dt.time(23, 59, 00):
+        while not resolveucaptcha: #and aux.hora('America/Sao_Paulo', 'HORA') < dt.time(23, 59, 00):
             # Variável que vai receber o texto de erro do site (caso exista)
             texto = ''
             # Verifica a hora para entrar no site, caso esteja fora do horário válido, nem inicia
-            if aux.hora('America/Sao_Paulo', 'HORA') < dt.time(22, 00, 00):
+            # if aux.hora('America/Sao_Paulo', 'HORA') < dt.time(22, 00, 00):
+            # Verifica se o chrome está aberta
+            if site is not None:
+                # Fecha o site
+                site.fecharsite()
+            # Carrega o site na memória
+            site = web.TratarSite(senha.siteCBM, senha.nomeprofileCBM)
+            # Inicia o browser carregado na memória
+            site.abrirnavegador()
+            # Verifica se não carregou ou abriu o site errado
+            if site.url != senha.siteCBM or site is None:
                 # Verifica se o chrome está aberta
                 if site is not None:
                     # Fecha o site
@@ -595,57 +605,47 @@ def extrairbombeiros(objeto, linha, dataatual=''):
                 site = web.TratarSite(senha.siteCBM, senha.nomeprofileCBM)
                 # Inicia o browser carregado na memória
                 site.abrirnavegador()
-                # Verifica se não carregou ou abriu o site errado
-                if site.url != senha.siteCBM or site is None:
-                    # Verifica se o chrome está aberta
-                    if site is not None:
-                        # Fecha o site
-                        site.fecharsite()
-                    # Carrega o site na memória
-                    site = web.TratarSite(senha.siteCBM, senha.nomeprofileCBM)
-                    # Inicia o browser carregado na memória
-                    site.abrirnavegador()
 
-                if site is not None and site.navegador != -1:
-                    # Carrega a página num dataframe
-                    site.retornarpaginaemdf()
-                    # Campo de Inscrição da tela Inicial
-                    inscricao = site.verificarobjetoexiste('ID', 'cbmerj', buscar_em_iframes=True)
-                    inscricao = site.buscarobjetoemdf({'id': 'cbmerj'})
+            if site is not None and site.navegador != -1:
+                # Carrega a página num dataframe
+                # site.retornarpaginaemdf()
+                # Campo de Inscrição da tela Inicial
+                inscricao = site.verificarobjetoexiste('ID', 'cbmerj', buscar_em_iframes=True)
+                # inscricao = site.buscarobjetoemdf({'id': 'cbmerj'})
 
-                    # Campo de dígito verificador
-                    dv = site.verificarobjetoexiste('ID', 'cbmerj_dv', buscar_em_iframes=True)
-                    dv = site.buscarobjetoemdf({'id': 'cbmerj_dv'})
+                # Campo de dígito verificador
+                dv = site.verificarobjetoexiste('ID', 'cbmerj_dv', buscar_em_iframes=True)
+                # dv = site.buscarobjetoemdf({'id': 'cbmerj_dv'})
 
-                    # Testa se tem os dois campos supracitados
-                    if inscricao is not None and dv is not None:
-                        # "Limpa" o campo de inscrição
-                        inscricao.clear()
-                        # Preenche o campo de inscrição com os dados do banco de dados (sem o dígito verificador)
-                        inscricao.send_keys(aux.left(linha[NrCBM], 7))
-                        # "Limpa" o campo do dígito verificador
-                        dv.clear()
-                        # Preenche o campo do dígito verificador com os dados do banco de dados
-                        dv.send_keys(aux.right(linha[NrCBM], 1))
-                        # Pega na URL o chave do CAPTCHA para a resolução
-                        elementocaptcha = site.buscarobjetoemdf({'id': 'recaptcha-token', 'nodeName': 'INPUT', 'value': '^NaN'}, 'baseURI')
+                # Testa se tem os dois campos supracitados
+                if inscricao is not None and dv is not None:
+                    # "Limpa" o campo de inscrição
+                    inscricao.clear()
+                    # Preenche o campo de inscrição com os dados do banco de dados (sem o dígito verificador)
+                    inscricao.send_keys(aux.left(linha[NrCBM], 7))
+                    # "Limpa" o campo do dígito verificador
+                    dv.clear()
+                    # Preenche o campo do dígito verificador com os dados do banco de dados
+                    dv.send_keys(aux.right(linha[NrCBM], 1))
+                    # Pega na URL o chave do CAPTCHA para a resolução
+                    elementocaptcha = site.buscarobjetoemdf({'id': 'recaptcha-token', 'nodeName': 'INPUT', 'value': '^NaN'}, 'baseURI')
 
-                        # Parsear a URL para extrair a parte da query
-                        parsed_url = urlparse(elementocaptcha)
-                        query_params = parse_qs(parsed_url.query)
-                        # Extrair o valor da chave 'k'
-                        k_value = query_params['k'][0]
-                        # Chama a função da solução de CAPTCHA
-                        resposta = site.resolvecaptchatipo2(k_value)
-                        # Se o CAPTCHA retornar valor ele manda a resposta para o text oculto
-                        if resposta is not None:
-                            # Como o text está oculto envio através da execução de script em Javascript
-                            site.navegador.execute_script(f"document.getElementById('g-recaptcha-response').innerHTML = '{resposta}'")
-                            # "Pega" o botão de enviar
-                            botaoenvio = site.verificarobjetoexiste('ID', 'btnEnviar', buscar_em_iframes=True)
-                            if botaoenvio is not None:
-                                # Clica no botão de enviar
-                                botaoenvio.click()
+                    # Parsear a URL para extrair a parte da query
+                    parsed_url = urlparse(elementocaptcha)
+                    query_params = parse_qs(parsed_url.query)
+                    # Extrair o valor da chave 'k'
+                    k_value = query_params['k'][0]
+                    # Chama a função da solução de CAPTCHA
+                    resposta = site.resolvecaptchatipo2(k_value)
+                    # Se o CAPTCHA retornar valor ele manda a resposta para o text oculto
+                    if resposta is not None:
+                        # Como o text está oculto envio através da execução de script em Javascript
+                        site.navegador.execute_script(f"document.getElementById('g-recaptcha-response').innerHTML = '{resposta}'")
+                        # "Pega" o botão de enviar
+                        botaoenvio = site.verificarobjetoexiste('ID', 'btnEnviar', buscar_em_iframes=True)
+                        if botaoenvio is not None:
+                            # Clica no botão de enviar
+                            botaoenvio.click()
 
 
     else:

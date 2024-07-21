@@ -6,6 +6,7 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 import extracao
+import auxiliares as aux
 
 
 class App(tk.Tk):
@@ -296,6 +297,7 @@ class App(tk.Tk):
         """
         Ação do botão
         """
+        aux.prevent_sleep()
         self.manipularradio(self.tipoextracao.get(), False, False)
         if self.labelservico is not None:
             self.labelservico.place_forget()
@@ -310,6 +312,7 @@ class App(tk.Tk):
         self.atualizatela()
         extrator = extracao.Extrator(self)
         extrator.controlaextracao()
+        aux.allow_sleep()
 
     def fechar_clicked(self):
         """

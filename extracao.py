@@ -195,8 +195,8 @@ class Extrator:
                 time.sleep(0.1)
                 self.texto = ''
                 # Verifica a hora para entrar no site, caso esteja fora do horário válido, nem inicia
-                if aux.hora('America/Sao_Paulo', 'HORA') < datetime.time(23, 59, 00):
-                    dadosiptu, df = Biptu.extrairbombeiros(self, linha, aux.hora('America/Sao_Paulo', 'DATA'))
+                # if aux.hora('America/Sao_Paulo', 'HORA') < datetime.time(23, 59, 00):
+                dadosiptu, df = Biptu.extrairbombeiros(self, linha, aux.hora('America/Sao_Paulo', 'DATA'))
 
             else:
                 # Mensagem de horário inválido para gerar boleto
