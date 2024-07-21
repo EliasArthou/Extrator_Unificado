@@ -36,7 +36,24 @@ def barcodereader(completepath, qualidade=300):
                     linhadigitavel = linha_digitavel(codigobarras)
                     if linhadigitavel:
                         valor, vencimento = extrai_info_boleto(linhadigitavel)
-                    dados = [aux.left(os.path.basename(completepath), 4), infocodigobarras[0].data.decode('ASCII'), infocodigobarras[0].type, completepath.replace('/', '\\'),
+                        if vencimento:
+                            renomear_arquivo(completepath, vencimento)
+
+                    cliente = ''
+
+                    # Obtém o nome do arquivo
+                    basename = os.path.basename(completepath)
+
+                    # Encontra a posição do primeiro sublinhado
+                    underscore_index = basename.find('_')
+
+                    # Verifica se há um sublinhado e pega os 4 caracteres após ele, caso contrário, pega os primeiros
+                    # 4 caracteres
+                    if underscore_index != -1:
+                        cliente = basename[underscore_index + 1:underscore_index + 5]
+                    else:
+                        cliente = basename[:4]
+                    dados = [cliente, infocodigobarras[0].data.decode('ASCII'), infocodigobarras[0].type, completepath.replace('/', '\\'),
                              linhadigitavel, valor, vencimento]
                     barras = dict(zip(cabecalho, dados))
                     break
@@ -118,3 +135,25 @@ def extrai_info_boleto(linha_digitavel):
     data_vencimento = (datetime.date(1997, 10, 7) + datetime.timedelta(days=fator_vencimento)).strftime("%d/%m/%Y")
 
     return valor_documento, data_vencimento
+
+
+def renomear_arquivo(caminho_atual, vencimento):
+    """
+    Renomeia o arquivo com o formato AAAAMM_nomeoriginal.pdf, se o nome do arquivo ainda não começar com AAAAMM_.
+
+    Args:
+    caminho_atual (str): Caminho atual do arquivo.
+    vencimento (str): Data de vencimento no formato DD/MM/AAAA.
+    """
+    try:
+        vencimento_datetime = datetime.datetime.strptime(vencimento, "%d/%m/%Y")
+        ano_mes = vencimento_datetime.strftime("%Y%m")
+        nome_arquivo = os.path.basename(caminho_atual)
+
+        # Verificar se o nome do arquivo já começa com AAAAMM_
+        if not nome_arquivo.startswith(ano_mes + "_"):
+            novo_nome = ano_mes + "_" + nome_arquivo
+            novo_caminho = os.path.join(os.path.dirname(caminho_atual), novo_nome)
+            os.rename(caminho_atual, novo_caminho)
+    except Exception as e:
+        print(f"Erro ao renomear o arquivo: {str(e)}")

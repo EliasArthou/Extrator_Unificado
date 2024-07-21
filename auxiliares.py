@@ -971,18 +971,18 @@ def retornarlistaboletos(listaadministradora=None):
             string_nomes_administradoras = ', '.join(["'{}'".format(item) for item in listaadministradora])
 
             # AND Codigo >= '3926'
-            sql = (senha.sqlcondominios + " WHERE NomeAdm in (%s) AND Codigo >= '3926' ORDER BY Codigo;" % string_nomes_administradoras)
+            sql = (senha.sqlcondominios + " WHERE NomeAdm in (%s) ORDER BY Codigo;" % string_nomes_administradoras)
         else:
-            sql = (senha.sqlcondominios + " WHERE NomeAdm in (%s) AND Codigo >= '3926' ORDER BY Codigo;" % retornastrinflistaadm('nomereal'))
+            sql = (senha.sqlcondominios + " WHERE NomeAdm in (%s) ORDER BY Codigo;" % retornastrinflistaadm('nomereal'))
     else:
         if listaadministradora is not None:
 
             string_nomes_administradoras = ', '.join(["'{}'".format(item) for item in listaadministradora])
 
-            sql = (senha.sqlcondominios + " AND NomeAdm in (%s) AND Codigo >= '3926' ORDER BY Codigo;" % string_nomes_administradoras)
+            sql = (senha.sqlcondominios + " AND NomeAdm in (%s) ORDER BY Codigo;" % string_nomes_administradoras)
         else:
             # string_nomes_administradoras = "'CONAC'"
-            sql = (senha.sqlcondominios + " AND NomeAdm in (%s) AND Codigo >= '3926' ORDER BY Codigo;" % retornastrinflistaadm('nomereal'))
+            sql = (senha.sqlcondominios + " AND NomeAdm in (%s)  ORDER BY Codigo;" % retornastrinflistaadm('nomereal'))
             # sql = (senha.sqlcondominios + ' AND NomeAdm in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
     return sql
 
