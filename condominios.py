@@ -2346,23 +2346,24 @@ def Webware(objeto, linha):
                                                                                   "v-list-item__title",
                                                                                   itemunico=False)
                                     achoucondominio = False
-                                    for icondominio in listacondominios:
-                                        if icondominio.text == linha[Apartamento].replace("'", ""):
-                                            achoucondominio = True
-                                            break
+                                    if listacondominios is not None:
+                                        for icondominio in listacondominios:
+                                            if icondominio.text == linha[Apartamento].replace("'", ""):
+                                                achoucondominio = True
+                                                break
 
-                                    if achoucondominio:
-                                        # Botão de expansão de Menu
-                                        if campoapart is not None:
-                                            # Expande o Menu
-                                            site.navegador.execute_script("arguments[0].click()", campoapart)
-                                            time.sleep(1)
-                                            # Clica no condomínio a ser extraído
-                                            site.navegador.execute_script("arguments[0].click()", icondominio)
+                                        if achoucondominio:
+                                            # Botão de expansão de Menu
+                                            if campoapart is not None:
+                                                # Expande o Menu
+                                                site.navegador.execute_script("arguments[0].click()", campoapart)
+                                                time.sleep(1)
+                                                # Clica no condomínio a ser extraído
+                                                site.navegador.execute_script("arguments[0].click()", icondominio)
 
-                                    botao_consulta = site.verificarobjetoexiste('ID', 'container-btn-consulta')
-                                    if botao_consulta is not None:
-                                        botao_consulta.click()
+                                        botao_consulta = site.verificarobjetoexiste('ID', 'container-btn-consulta')
+                                        if botao_consulta is not None:
+                                            botao_consulta.click()
 
                                 # Pega todos os botões de gerar boleto do frame
                                 objetosboletos = site.verificarobjetoexiste('XPATH',

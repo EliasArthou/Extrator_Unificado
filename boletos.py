@@ -5,7 +5,7 @@ import auxiliares as aux
 import datetime
 
 
-def barcodereader(completepath, qualidade=300):
+def barcodereader(completepath, qualidade=300, renomear=False):
     # Mensagem de erro
     mensagem_erro = "Impossível ler código de barras"
 
@@ -36,7 +36,7 @@ def barcodereader(completepath, qualidade=300):
                     linhadigitavel = linha_digitavel(codigobarras)
                     if linhadigitavel:
                         valor, vencimento = extrai_info_boleto(linhadigitavel)
-                        if vencimento:
+                        if vencimento and renomear:
                             renomear_arquivo(completepath, vencimento)
 
                     cliente = ''

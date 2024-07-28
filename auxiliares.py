@@ -17,13 +17,12 @@ from sqlalchemy import create_engine
 import openpyxl
 import ctypes
 
-caminho = ''
-
-
 # Constantes para SetThreadExecutionState
 ES_CONTINUOUS = 0x80000000
 ES_SYSTEM_REQUIRED = 0x00000001
 ES_DISPLAY_REQUIRED = 0x00000002
+
+caminho = ''
 
 
 class Banco:
@@ -705,9 +704,7 @@ def extrairtextopdf(caminho, tipos):
             df['Contribuinte'] = listalimpa
 
             # lista = re.findall(r'AUTENTICAÇÃO AUTOMÁTICA[\D]PARA USO DO BANCO[\D]\n([\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d])[\D]', texto)
-            lista = re.findall(
-                r'AUTENTICAÇÃO AUTOMÁTICA[\D]PARA USO DO BANCO[\D]\n([\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d])\n',
-                texto)
+            lista = re.findall(r'AUTENTICAÇÃO AUTOMÁTICA[\D]PARA USO DO BANCO[\D]\n([\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d])\n', texto)
             listalimpa = []
             for indice, linha in enumerate(lista):
                 linha = linha.replace('.', '')
@@ -812,8 +809,7 @@ def timezones_disponiveis():
     return timezones
 
 
-def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, centralizado=False, codigobarras=True, posicao_x=0,
-                          posicao_y=0):
+def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, centralizado=False, codigobarras=True, posicao_x=0, posicao_y=0):
     import fitz
 
     tempoespera = 0
@@ -970,19 +966,18 @@ def retornarlistaboletos(listaadministradora=None):
         if listaadministradora is not None:
             string_nomes_administradoras = ', '.join(["'{}'".format(item) for item in listaadministradora])
 
-            # AND Codigo >= '3926'
-            sql = (senha.sqlcondominios + " WHERE NomeAdm in (%s) ORDER BY Codigo;" % string_nomes_administradoras)
+            sql = (senha.sqlcondominios + ' WHERE NomeAdm in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
         else:
-            sql = (senha.sqlcondominios + " WHERE NomeAdm in (%s) ORDER BY Codigo;" % retornastrinflistaadm('nomereal'))
+            sql = (senha.sqlcondominios + ' WHERE NomeAdm in (%s) ORDER BY Codigo;' % retornastrinflistaadm('nomereal'))
     else:
         if listaadministradora is not None:
 
             string_nomes_administradoras = ', '.join(["'{}'".format(item) for item in listaadministradora])
 
-            sql = (senha.sqlcondominios + " AND NomeAdm in (%s) ORDER BY Codigo;" % string_nomes_administradoras)
+            sql = (senha.sqlcondominios + ' AND NomeAdm in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
         else:
-            # string_nomes_administradoras = "'CONAC'"
-            sql = (senha.sqlcondominios + " AND NomeAdm in (%s)  ORDER BY Codigo;" % retornastrinflistaadm('nomereal'))
+            # string_nomes_administradoras = "'ABRJ ADMINISTRADORA DE BENS'"
+            sql = (senha.sqlcondominios + ' AND NomeAdm in (%s) ORDER BY Codigo;' % retornastrinflistaadm('nomereal'))
             # sql = (senha.sqlcondominios + ' AND NomeAdm in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
     return sql
 
