@@ -40,7 +40,7 @@ def barcodereader(completepath, qualidade=300, renomear=True):
                         valor, vencimento = extrai_info_boleto(linhadigitavel)
                         if vencimento and renomear:
                             # renomear_arquivo(completepath, vencimento)
-                            mover_arquivo(completepath, vencimento)
+                            mover_arquivo_condominio(completepath, vencimento)
 
                     cliente = ''
 
@@ -163,7 +163,7 @@ def renomear_arquivo(caminho_atual, vencimento):
         print(f"Erro ao renomear o arquivo: {str(e)}")
 
 
-def mover_arquivo(caminho_atual, vencimento):
+def mover_arquivo_condominio(caminho_atual, vencimento):
     """
     Move o arquivo para uma pasta no formato YYYY_MM se o ano e mês do vencimento forem menores que o ano e mês atuais.
     Se a pasta não existir, ela será criada. Se o ano e mês forem iguais ou maiores, o arquivo permanece no lugar.
