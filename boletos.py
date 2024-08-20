@@ -3,9 +3,11 @@ from pdf2image import convert_from_path
 import os
 import auxiliares as aux
 import datetime
+import shutil
+import logging
 
 
-def barcodereader(completepath, qualidade=300, renomear=False):
+def barcodereader(completepath, qualidade=300, renomear=True):
     # Mensagem de erro
     mensagem_erro = "Impossível ler código de barras"
 
@@ -37,7 +39,8 @@ def barcodereader(completepath, qualidade=300, renomear=False):
                     if linhadigitavel:
                         valor, vencimento = extrai_info_boleto(linhadigitavel)
                         if vencimento and renomear:
-                            renomear_arquivo(completepath, vencimento)
+                            # renomear_arquivo(completepath, vencimento)
+                            mover_arquivo(completepath, vencimento)
 
                     cliente = ''
 
@@ -49,10 +52,11 @@ def barcodereader(completepath, qualidade=300, renomear=False):
 
                     # Verifica se há um sublinhado e pega os 4 caracteres após ele, caso contrário, pega os primeiros
                     # 4 caracteres
-                    if underscore_index != -1:
-                        cliente = basename[underscore_index + 1:underscore_index + 5]
-                    else:
-                        cliente = basename[:4]
+                    # if underscore_index != -1:
+                    #     cliente = basename[underscore_index + 1:underscore_index + 5]
+                    # else:
+                    #     cliente = basename[:4]
+                    cliente = basename[4:]
                     dados = [cliente, infocodigobarras[0].data.decode('ASCII'), infocodigobarras[0].type, completepath.replace('/', '\\'),
                              linhadigitavel, valor, vencimento]
                     barras = dict(zip(cabecalho, dados))
@@ -157,3 +161,40 @@ def renomear_arquivo(caminho_atual, vencimento):
             os.rename(caminho_atual, novo_caminho)
     except Exception as e:
         print(f"Erro ao renomear o arquivo: {str(e)}")
+
+
+def mover_arquivo(caminho_atual, vencimento):
+    """
+    Move o arquivo para uma pasta no formato YYYY_MM se o ano e mês do vencimento forem menores que o ano e mês atuais.
+    Se a pasta não existir, ela será criada. Se o ano e mês forem iguais ou maiores, o arquivo permanece no lugar.
+
+    Args:
+    caminho_atual (str): Caminho atual do arquivo.
+    vencimento (str): Data de vencimento no formato DD/MM/AAAA.
+    """
+    try:
+        # Verifica se a data está no formato esperado
+        try:
+            vencimento_datetime = datetime.datetime.strptime(vencimento, "%d/%m/%Y")
+        except ValueError:
+            raise ValueError("Formato de data inválido. Use DD/MM/AAAA.")
+
+        ano_mes_vencimento = vencimento_datetime.strftime("%Y_%m")
+        ano_mes_atual = datetime.datetime.now().strftime("%Y_%m")
+
+        # Verifica se o ano e mês do vencimento são menores que o atual
+        if ano_mes_vencimento < ano_mes_atual:
+            diretorio_destino = os.path.join(os.path.dirname(caminho_atual), ano_mes_vencimento)
+
+            # Cria a pasta se não existir
+            if not os.path.exists(diretorio_destino):
+                os.makedirs(diretorio_destino)
+
+            # Move o arquivo para a pasta
+            shutil.move(caminho_atual, diretorio_destino)
+            print(f"Arquivo movido para: {diretorio_destino}")
+        else:
+            print("O arquivo permanece no local atual.")
+
+    except Exception as e:
+        logging.error(f"Erro ao mover o arquivo {caminho_atual}: {str(e)}")

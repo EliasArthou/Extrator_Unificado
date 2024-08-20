@@ -789,6 +789,8 @@ def cipa(objeto, linha):
                             if msgerro is None and msgerro1 is None:
                                 # Operação normal
                                 site.delay = 10
+
+                                time.sleep(3)
                                 # Verifica se está na página de lista de condomínios
                                 if site.verificarobjetoexiste('CSS_SELECTOR', "condominium-list", sotestar=True):
                                     icondominio = site.buscar_por_proximidade('CSS_SELECTOR',
