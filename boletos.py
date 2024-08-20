@@ -56,7 +56,7 @@ def barcodereader(completepath, qualidade=300, renomear=True):
                     #     cliente = basename[underscore_index + 1:underscore_index + 5]
                     # else:
                     #     cliente = basename[:4]
-                    cliente = basename[4:]
+                    cliente = basename[:4]
                     dados = [cliente, infocodigobarras[0].data.decode('ASCII'), infocodigobarras[0].type, completepath.replace('/', '\\'),
                              linhadigitavel, valor, vencimento]
                     barras = dict(zip(cabecalho, dados))
