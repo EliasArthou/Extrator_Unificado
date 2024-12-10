@@ -9,7 +9,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import ElementClickInterceptedException, TimeoutException
 from webdriver_manager.chrome import ChromeDriverManager
 from undetected_chromedriver import Chrome, ChromeOptions
@@ -22,6 +22,9 @@ from a_selenium_iframes_crawler import Iframes
 import auxiliares as aux
 import messagebox
 import sensiveis as senhas
+import requests
+import re
+from weasyprint import HTML
 
 
 class TratarSite:
@@ -110,6 +113,7 @@ class TratarSite:
             self.options.add_argument('--disable-extensions')
             self.options.add_argument('--disable-plugins')
 
+
             if ableprintpreview:
                 self.options.add_argument('--kiosk-printing')
             else:
@@ -122,12 +126,21 @@ class TratarSite:
             driver = Chrome(options=self.options)
             driver.maximize_window()
         else:
+
+            # Habilitar logs de desempenho
+            capabilities = webdriver.DesiredCapabilities.CHROME.copy()
+            capabilities['goog:loggingPrefs'] = {'performance': 'ALL'}
+
             self.options.add_argument("--disable-features=ChromeWhatsNewUI")
             self.options.add_argument("--disable-blink-features=AutomationControlled")
             self.options.add_experimental_option('excludeSwitches', ["enable-automation"])
             self.options.add_experimental_option('useAutomationExtension', False)
             chrome_service = Service(ChromeDriverManager().install())
-            driver = webdriver.Chrome(options=self.options, service=chrome_service)
+            driver = webdriver.Chrome(
+                options=self.options,
+                service=chrome_service,
+                desired_capabilities=capabilities
+            )
 
         return driver
 
@@ -202,20 +215,19 @@ class TratarSite:
             elemento = None
 
             if itemunico:
-                if elemento_pai:
-                    elemento = WebDriverWait(self.navegador, self.delay).until(
-                        EC.visibility_of_element_located((by_type, endereco), elemento_pai))
-                else:
+                if not elemento_pai:
                     elemento = WebDriverWait(self.navegador, self.delay).until(
                         EC.visibility_of_element_located((by_type, endereco)))
+                else:
+                    elemento = elemento_pai.find_element(by_type, endereco)
                 if valorselecao:
                     select = Select(elemento)
                     select.select_by_visible_text(valorselecao)
             else:
-                if elemento_pai:
-                    elementos = elemento_pai.find_elements(by_type, endereco)
-                else:
+                if not elemento_pai:
                     elementos = self.navegador.find_elements(by_type, endereco)
+                else:
+                    elementos = elemento_pai.find_elements(by_type, endereco)
                 if not elementos:
                     elemento = None
                 elif valorselecao:
@@ -509,68 +521,69 @@ class TratarSite:
             time.sleep(1)
 
     def pegaarquivobaixado(self, timeout, quantabas=0, caminhobaixado=''):
+        """
+        Monitora o download de arquivos usando a aba chrome://downloads.
+        """
         if quantabas > 0:
             while self.num_abas() > quantabas:
                 time.sleep(1)
         quantabas = self.num_abas()
+
+        # Abre a aba de downloads
         self.navegador.execute_script('window.open()')
         time.sleep(2)
+
         if quantabas < self.num_abas():
             self.navegador.switch_to.window(self.navegador.window_handles[-1])
             self.navegador.get('chrome://downloads')
-            time.sleep(1)
-            endTime = time.time() + timeout
+            time.sleep(5)
 
-            max_attempts = 30
-            attempts = 0
-            download_started = False
+            end_time = time.time() + timeout
+            download_completed = False
 
-            while attempts < max_attempts and not download_started:
-                download_items = self.navegador.execute_script(
-                    "return document.querySelector('downloads-manager').shadowRoot.querySelector('iron-list').items;")
-                if download_items:
-                    download_started = True
-                else:
-                    time.sleep(1)
-                    attempts += 1
+            while time.time() < end_time:
+                try:
+                    # Obtém os itens de download
+                    download_items = self.navegador.execute_script("""
+                        let downloadsManager = document.querySelector('downloads-manager');
+                        if (!downloadsManager) return null;
 
-            if download_started:
-                while True:
-                    try:
-                        downloadPercentage = self.navegador.execute_script(
-                            "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('#progress').value")
-                        if downloadPercentage == 100:
-                            time.sleep(1)
-                            return self.navegador.execute_script(
-                                "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('div#content  #file-link').text")
-                        time.sleep(1)
+                        let shadowRoot = downloadsManager.shadowRoot;
+                        if (!shadowRoot) return null;
 
-                    except BaseException as err:
-                        try:
-                            time.sleep(1)
-                            arquivo = self.navegador.execute_script(
-                                "return document.querySelector('downloads-manager').shadowRoot.querySelector('#downloadsList downloads-item').shadowRoot.querySelector('div#content  #file-link').text")
-                            if len(arquivo) > 0:
-                                return arquivo
-                            else:
-                                pass
+                        let items = shadowRoot.querySelectorAll('downloads-item');
+                        if (!items) return [];
 
-                        except Exception as e:
-                            if len(caminhobaixado) > 0:
-                                self.esperadownloads(caminhobaixado, timeout, 1)
-                                arquivo = aux.ultimoarquivo(caminhobaixado, 'pdf')
-                                return os.path.basename(arquivo)
+                        return Array.from(items).map(item => {
+                            let itemShadowRoot = item.shadowRoot;
+                            let fileName = itemShadowRoot.querySelector('#file-link').textContent.trim();
+                            let state = itemShadowRoot.querySelector('#tag').textContent.trim();
+                            return { fileName: fileName, state: state };
+                        });
+                    """)
 
-                    finally:
-                        time.sleep(1)
-                        if self.num_abas() > 1:
-                            if self.irparaaba(titulo='Downloads'):
-                                if self.navegador.current_url == 'chrome://downloads/':
-                                    self.fecharaba()
+                    # Verifica os downloads concluídos
+                    for item in download_items:
+                        if item['state'] == 'Concluído':  # Verifica o estado do download
+                            file_name = item['fileName']
+                            file_path = os.path.join(self.caminhodownload, file_name)
 
-                    time.sleep(1)
-                    if time.time() > endTime:
-                        break
+                            if os.path.exists(file_path):
+                                print(f"Arquivo baixado identificado: {file_path}")
+                                self.fecharaba()  # Fecha a aba de downloads
+                                return file_path
+
+                except Exception as e:
+                    print(f"Erro ao monitorar downloads: {e}")
+
+                time.sleep(1)
+
+            # Fecha a aba de downloads após o timeout
+            if self.num_abas() > 1:
+                self.fecharaba()
+
+            print("Tempo limite para download excedido.")
+            return None
 
     def retornarpaginaemdf(self):
         self.dataframepagina = get_df(self.navegador, By, WebDriverWait, EC, queryselector='*', with_methods=True)
@@ -695,3 +708,362 @@ class TratarSite:
 
                 print(resposta)
             return None
+
+
+    # def monitorar_downloads_sem_href(self, link_elemento, timeout=300, clickscript=False, via_request=False,
+    #                                  url_override=None):
+    #     """
+    #     Monitora ou realiza o download diretamente de um link_elemento.
+    #
+    #     Parâmetros:
+    #     - link_elemento: WebElement que inicia o download.
+    #     - timeout: Tempo máximo (em segundos) para aguardar o download.
+    #     - clickscript: Se True, usa `execute_script` para clicar no elemento.
+    #     - via_request: Se True, realiza o download via `requests` ao invés de clicar no link.
+    #     - url_override: URL manual para realizar o download, usado em redirecionamentos.
+    #
+    #     Retorna:
+    #     - O caminho completo do arquivo baixado ou None em caso de falha.
+    #     """
+    #     print("Iniciando monitoramento/download...")
+    #
+    #     if not via_request:
+    #         # Modo padrão: clique no elemento e monitoramento
+    #         if not clickscript:
+    #             link_elemento.click()
+    #         else:
+    #             self.navegador.execute_script("arguments[0].click()", link_elemento)
+    #
+    #         time.sleep(2)
+    #         print("Clique disparado. Monitorando logs e pasta de downloads...")
+    #
+    #         tempo_inicio = time.time()
+    #         download_guid = None
+    #         suggested_filename = None
+    #         arquivo_final = None
+    #
+    #         while time.time() - tempo_inicio < timeout:
+    #             logs = self.navegador.get_log("performance")
+    #             for log in logs:
+    #                 message = json.loads(log["message"])
+    #                 method = message["message"]["method"]
+    #                 print(message)
+    #
+    #                 # Detecta abertura de uma nova janela (window.open)
+    #                 if method == "Page.windowOpen":
+    #                     params = message["message"]["params"]
+    #                     url_opened = params.get("url")
+    #                     print(f"Nova janela detectada: URL={url_opened}")
+    #                     # Confirma se o URL é de download e redireciona para request
+    #                     if "boleto" in url_opened.lower():
+    #                         print(f"Detectado comportamento de redirecionamento para download: {url_opened}")
+    #                         return self.monitorar_downloads_sem_href(
+    #                             link_elemento=None, timeout=timeout, clickscript=False, via_request=True,
+    #                             url_override=url_opened
+    #                         )
+    #
+    #                 # Detecta início do download
+    #                 if method == "Page.downloadWillBegin":
+    #                     params = message["message"]["params"]
+    #                     download_guid = params.get("guid")
+    #                     suggested_filename = params.get("suggestedFilename")
+    #                     print(f"Download iniciado: GUID={download_guid}, Nome sugerido={suggested_filename}")
+    #
+    #                 # Detecta progresso ou finalização
+    #                 if method == "Page.downloadProgress":
+    #                     params = message["message"]["params"]
+    #                     current_guid = params.get("guid")
+    #                     state = params.get("state")
+    #
+    #                     if current_guid == download_guid:
+    #                         if state == "completed":
+    #                             print(f"Download concluído: GUID={current_guid}")
+    #
+    #                             # Identifica o arquivo baixado na pasta
+    #                             arquivos_no_diretorio = os.listdir(self.caminhodownload)
+    #                             candidatos = [
+    #                                 os.path.join(self.caminhodownload, arquivo)
+    #                                 for arquivo in arquivos_no_diretorio
+    #                                 if suggested_filename and arquivo.startswith(suggested_filename.split('.')[0])
+    #                             ]
+    #
+    #                             if candidatos:
+    #                                 candidatos.sort(key=os.path.getmtime, reverse=True)
+    #                                 arquivo_final = candidatos[0]
+    #                                 print(f"Arquivo baixado identificado: {arquivo_final}")
+    #                                 return arquivo_final
+    #                             else:
+    #                                 print("Arquivo não encontrado na pasta de downloads.")
+    #                                 return None
+    #
+    #                 time.sleep(1)
+    #
+    #         print("Tempo limite para monitoramento excedido.")
+    #         return None
+    #
+    #     else:
+    #         # Exceção: Realiza o download via requests
+    #         href = url_override or (link_elemento.get_attribute("href") if link_elemento else None)
+    #         if not href:
+    #             print("Elemento ou URL manual não fornecido. Não é possível fazer o download via request.")
+    #             return None
+    #
+    #         # Define o nome do arquivo a partir da URL, removendo caracteres inválidos
+    #         suggested_filename = 'baixado.pdf' #re.sub(r'[<>:"/\\|?*]', '_', href.split("/")[-1])
+    #         arquivo_final = os.path.join(self.caminhodownload, suggested_filename)
+    #
+    #         try:
+    #             # Captura os cookies ativos do navegador
+    #             cookies = self.navegador.get_cookies()
+    #             cookies_dict = {cookie['name']: cookie['value'] for cookie in cookies}
+    #
+    #             # Configura o User-Agent do navegador
+    #             headers = {
+    #                 'User-Agent': self.navegador.execute_script("return navigator.userAgent;")
+    #             }
+    #
+    #             # Realiza o download via requests
+    #             print(f"Baixando arquivo diretamente de: {href}")
+    #             response = requests.get(href, headers=headers, cookies=cookies_dict, stream=True, timeout=timeout)
+    #             response.raise_for_status()
+    #
+    #             with open(arquivo_final, "wb") as file:
+    #                 for chunk in response.iter_content(chunk_size=8192):
+    #                     file.write(chunk)
+    #
+    #             print(f"Download concluído via request: {arquivo_final}")
+    #             return arquivo_final
+    #
+    #         except requests.RequestException as e:
+    #             if os.path.isfile(arquivo_final):
+    #                 os.remove(arquivo_final)
+    #             print(f"Erro ao baixar arquivo via requests: {e}")
+    #             return None
+
+    def monitorar_downloads_sem_href(self, link_elemento, timeout=300, clickscript=False, via_request=False,
+                                     url_override=None):
+        """
+        Monitora ou realiza o download diretamente de um link_elemento.
+
+        Parâmetros:
+        - link_elemento: WebElement que inicia o download.
+        - timeout: Tempo máximo (em segundos) para aguardar o download.
+        - clickscript: Se True, usa `execute_script` para clicar no elemento.
+        - via_request: Se True, realiza o download via `requests` ao invés de clicar no link.
+        - url_override: URL manual para realizar o download, usado em redirecionamentos.
+
+        Retorna:
+        - O caminho completo do arquivo baixado ou None em caso de falha.
+        """
+        print("Iniciando monitoramento/download...")
+
+        if not via_request:
+            original_abas = len(self.navegador.window_handles)
+            original_url = self.navegador.current_url
+
+            # Clique no elemento ou execute o script
+            if not clickscript:
+                link_elemento.click()
+            else:
+                self.navegador.execute_script("arguments[0].click()", link_elemento)
+
+            time.sleep(2)
+            print("Clique disparado. Monitorando logs e pasta de downloads...")
+
+            tempo_inicio = time.time()
+            download_guid = None
+            suggested_filename = None
+            arquivo_final = None
+
+            while time.time() - tempo_inicio < timeout:
+                logs = self.navegador.get_log("performance")
+                for log in logs:
+                    message = json.loads(log["message"])
+                    method = message["message"]["method"]
+
+                    # Detecta início do download
+                    if method == "Page.downloadWillBegin":
+                        params = message["message"]["params"]
+                        download_guid = params.get("guid")
+                        suggested_filename = params.get("suggestedFilename")
+                        print(f"Download iniciado: GUID={download_guid}, Nome sugerido={suggested_filename}")
+
+                    # Detecta progresso e finalização
+                    if method == "Page.downloadProgress":
+                        params = message["message"]["params"]
+                        current_guid = params.get("guid")
+                        state = params.get("state")
+
+                        if current_guid == download_guid:
+                            if state == "completed":
+                                print(f"Download concluído: GUID={current_guid}")
+
+                                # Identifica o arquivo na pasta de downloads
+                                arquivos_no_diretorio = os.listdir(self.caminhodownload)
+                                candidatos = [
+                                    os.path.join(self.caminhodownload, arquivo)
+                                    for arquivo in arquivos_no_diretorio
+                                    if suggested_filename and arquivo.startswith(suggested_filename.split('.')[0])
+                                ]
+                                if candidatos:
+                                    candidatos.sort(key=os.path.getmtime, reverse=True)
+                                    arquivo_final = candidatos[0]
+                                    print(f"Arquivo baixado identificado: {arquivo_final}")
+                                    return arquivo_final
+                                else:
+                                    print("Arquivo não encontrado na pasta de downloads.")
+                                    return None
+
+                    # Detecta nova aba aberta
+                    if method == "Page.windowOpen":
+                        params = message["message"]["params"]
+                        url_opened = params.get("url")
+                        print(f"Nova aba detectada: URL={url_opened}")
+
+                        # Troca para a nova aba se uma foi aberta
+                        if len(self.navegador.window_handles) > original_abas:
+                            self.navegador.switch_to.window(self.navegador.window_handles[-1])
+                            print("Nova aba detectada. Mudando para a nova aba.")
+                            time.sleep(2)
+
+                            # Procura links de download na aba
+                            download_link = self.navegador.execute_script("""
+                                const links = document.querySelectorAll('a, iframe, embed');
+                                for (let link of links) {
+                                    if (link.href && link.href.endsWith('.pdf')) return link.href;
+                                    if (link.src && link.src.endsWith('.pdf')) return link.src;
+                                }
+                                return null;
+                            """)
+
+                            if download_link:
+                                print(f"Link de download encontrado na nova aba: {download_link}")
+                                self.navegador.close()
+                                self.navegador.switch_to.window(self.navegador.window_handles[0])
+                                return self.monitorar_downloads_sem_href(
+                                    link_elemento=None, timeout=timeout, clickscript=False, via_request=True,
+                                    url_override=download_link
+                                )
+
+                            print("Nenhum link de download detectado na nova aba.")
+                            self.navegador.close()
+                            self.navegador.switch_to.window(self.navegador.window_handles[0])
+
+                time.sleep(1)
+
+            print("Tempo limite para monitoramento excedido.")
+            return None
+
+        else:
+            # Download via requests
+            href = url_override or (link_elemento.get_attribute("href") if link_elemento else None)
+            if not href:
+                print("Elemento ou URL manual não fornecido. Não é possível fazer o download via request.")
+                return None
+
+            # Ajusta URL caso necessário
+            if 'visualizar-arquivo' in href:
+                href = href.replace('visualizar-arquivo', 'visualizar-conteudo-do-arquivo')
+
+            # Nome do arquivo
+            suggested_filename = re.sub(r'[<>:"/\\|?*]', '_', href.split("/")[-1]) or 'arquivo_baixado.pdf'
+            arquivo_final = os.path.join(self.caminhodownload, suggested_filename)
+
+            try:
+                # Captura cookies e configura headers
+                cookies = self.navegador.get_cookies()
+                cookies_dict = {cookie['name']: cookie['value'] for cookie in cookies}
+                headers = {
+                    'User-Agent': self.navegador.execute_script("return navigator.userAgent;"),
+                    'Referer': href
+                }
+
+                # Download via requests
+                print(f"Baixando arquivo diretamente de: {href}")
+                response = requests.get(href, headers=headers, cookies=cookies_dict, stream=True, timeout=timeout)
+                response.raise_for_status()
+
+                # Verifica se é um PDF ou HTML
+                content_type = response.headers.get('Content-Type', '').lower()
+                if 'pdf' in content_type:
+                    with open(arquivo_final, "wb") as file:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            file.write(chunk)
+                    print(f"Download concluído via request: {arquivo_final}")
+                    return arquivo_final
+                else:
+                    # Converte HTML para PDF
+                    print("O conteúdo não é PDF, convertendo para PDF...")
+                    return self.converte_html_para_pdf(response.text, arquivo_final)
+
+            except requests.RequestException as e:
+                if os.path.isfile(arquivo_final):
+                    os.remove(arquivo_final)
+                print(f"Erro ao baixar arquivo via requests: {e}")
+                return None
+
+    def converte_html_para_pdf(self, html_content, output_path):
+        """
+        Converte conteúdo HTML em PDF.
+
+        Parâmetros:
+        - html_content: String contendo o código HTML.
+        - output_path: Caminho onde o PDF será salvo.
+
+        Retorna:
+        - Caminho do arquivo PDF gerado ou None em caso de falha.
+        """
+        try:
+            HTML(string=html_content).write_pdf(output_path)
+            print(f"PDF gerado com sucesso: {output_path}")
+            return output_path
+        except Exception as e:
+            print(f"Erro ao converter HTML para PDF: {e}")
+            return None
+
+    def filtrar_itens_por_fuzzy(self, lista, identificador, valor_identificador, texto_condominio, texto_apartamento, corte_condominio=70, corte_apartamento=70):
+        """
+        Filtra itens de uma lista com base em uma correspondência fuzzy com os textos de título e secundário.
+        Retorna duas listas: uma com itens baseados no título e outra com itens baseados no texto secundário.
+
+        Parâmetros:
+        - lista: Lista de elementos para verificar.
+        - texto_condominio: Texto de referência para o título.
+        - texto_apartamento: Texto de referência para o secundário.
+        - corte_condominio: Percentual de corte para o condomínio (default 70%).
+        - corte_apartamento: Percentual de corte para o apartamento (default 70%).
+
+        Retorna:
+        - Lista de candidatos baseados no título (índice e elemento).
+        - Lista de candidatos baseados no texto secundário (índice e elemento).
+        """
+        candidatos_titulo = []
+        candidatos_secundario = []
+        correspondenciaexata = False
+
+        for idx, elemento in enumerate(lista):
+            try:
+                # Obtém o título e o texto secundário
+                titulo = self.verificarobjetoexiste(identificador, valor_identificador, itemunico=True, elemento_pai=elemento)
+                titulo_texto = titulo.text.strip() if titulo else ""
+                secundario_texto = elemento.text.split('\n')
+                if len(secundario_texto) >= 2:
+                    secundario_texto = secundario_texto[1]
+                    # Calcula a similaridade para o texto secundário
+                    if secundario_texto.lower() == texto_apartamento.lower():
+                        return True, [], (idx, elemento)
+                    similaridade_secundario = fuzz.ratio(secundario_texto.lower(), texto_apartamento.lower())
+                    if similaridade_secundario >= corte_apartamento:
+                        candidatos_secundario.append((idx, elemento))
+                else:
+                    secundario_texto = ''
+
+                # Calcula a similaridade para o título
+                similaridade_titulo = fuzz.ratio(titulo_texto.lower(), texto_condominio.lower())
+                if similaridade_titulo >= corte_condominio:
+                    candidatos_titulo.append((idx, elemento))
+
+            except Exception as e:
+                print(f"Erro ao processar elemento {idx}: {e}")
+
+        return False, candidatos_titulo, candidatos_secundario

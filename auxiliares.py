@@ -16,6 +16,7 @@ import boletos
 from sqlalchemy import create_engine
 import openpyxl
 import ctypes
+from fuzzywuzzy import fuzz
 
 # Constantes para SetThreadExecutionState
 ES_CONTINUOUS = 0x80000000

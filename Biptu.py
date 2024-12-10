@@ -11,8 +11,8 @@ import pandas as pd
 from selenium.webdriver.support.ui import Select
 from datetime import date
 from datetime import datetime
-import datetime as dt
-import messagebox as msg
+# import datetime as dt
+# import messagebox as msg
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, parse_qs
 
@@ -66,6 +66,7 @@ def extrairboletos(objeto, linha, nrguia=0, site=None):
                 caminhodestino = os.path.join(objeto.pastadownload, codigocliente + '_' + linha[NrIPTU] + '.pdf')
             else:
                 caminhodestino = os.path.join(objeto.pastadownload, codigocliente + '_' + linha[NrIPTU] + '_' + str(nrguia + 1) + '.pdf')
+
         # Verifica se o arquivo já existe e se não está pedindo pra pegar as informações do site
         # Se o arquivo existir ele pega as informações do arquivo
         if not os.path.isfile(caminhodestino) or not gerarboleto:
@@ -207,23 +208,35 @@ def extrairboletos(objeto, linha, nrguia=0, site=None):
 
                                                 if site.navegador.current_url == senha.telaboletoIPTU:
                                                     linkdownload = site.verificarobjetoexiste('LINK_TEXT', 'aqui')
-                                                    if linkdownload is not None:
-                                                        if botaogerar is not None:
-                                                            if getattr(sys, 'frozen', False):
-                                                                linkdownload.click()
+                                                    if linkdownload:
+                                                        # if botaogerar is not None:
+                                                        #     if getattr(sys, 'frozen', False):
+                                                        #         linkdownload.click()
+                                                        #     else:
+                                                        #         site.navegador.execute_script("arguments[0].click()", linkdownload)
+
+                                                        for i, boleto in enumerate(linkdownload, start=1):
+                                                            if botaogerar is not None:
+                                                                if getattr(sys, 'frozen', False):
+                                                                    caminho_arquivo = site.monitorar_downloads_sem_href(
+                                                                        link_elemento=boleto,
+                                                                        timeout=120,
+                                                                        clickscript=not(getattr(sys, 'frozen', False))
+                                                                    )
+                                                                    if caminho_arquivo:
+                                                                        novonomearquivo = os.path.join(
+                                                                            objeto.pastadownload,
+                                                                            codigocliente) + (
+                                                                                f"_{i - 1}.pdf" if i > 1 else ".pdf")
+
+
+                                                                        aux.adicionarcabecalhopdf(caminho_arquivo,
+                                                                                                  novonomearquivo,
+                                                                                                  codigocliente,
+                                                                                                  codigobarras=False)
                                                             else:
-                                                                site.navegador.execute_script("arguments[0].click()", linkdownload)
+                                                                print(f"Falha ao capturar o arquivo baixado para o boleto {i}.")
 
-                                                    baixado = site.pegaarquivobaixado(tempoesperadownload, 1)
-                                                    if baixado:
-                                                        baixado = os.path.join(site.caminhodownload, baixado)
-                                                    else:
-                                                        baixado = ''
-
-                                                    if len(baixado) > 0:
-                                                        objeto.visual.mudartexto('labelstatus', 'Salvando Boleto...')
-                                                        caminhodestino = aux.to_raw(caminhodestino)
-                                                        aux.adicionarcabecalhopdf(baixado, caminhodestino, codigocliente, codigobarras=False)
                                 if nrguia == 0 and len(guias):
                                     for indice, guia in enumerate(guias):
                                         if site is not None:
@@ -247,7 +260,6 @@ def extrairboletos(objeto, linha, nrguia=0, site=None):
                                                     df = dftemp
                                                 else:
                                                     df = pd.concat([df, dftemp], ignore_index=True)
-                                                    # df = df.append(dftemp, ignore_index=True)
 
                     else:
                         guiaexercicio = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_Guia1')
@@ -372,24 +384,24 @@ def extrairnadaconsta(objeto, linha, dataatual=''):
                             if mensagemerro is None:
                                 linkdownload = site.verificarobjetoexiste('LINK_TEXT', 'aqui')
                                 if linkdownload is not None:
-                                    if botaogerar is not None:
-                                        if getattr(sys, 'frozen', False):
-                                            linkdownload.click()
-                                        else:
-                                            site.navegador.execute_script("arguments[0].click()", linkdownload)
+                                    for i, boleto in enumerate(linkdownload, start=1):
+                                        if botaogerar is not None:
+                                            if getattr(sys, 'frozen', False):
+                                                caminho_arquivo = site.monitorar_downloads_sem_href(
+                                                    link_elemento=boleto,
+                                                    timeout=120,
+                                                    clickscript=not (getattr(sys, 'frozen', False))
+                                                )
+                                                if caminho_arquivo:
+                                                    novonomearquivo = os.path.join(
+                                                        objeto.pastadownload,
+                                                        codigocliente) + (
+                                                                          f"_{i - 1}.pdf" if i > 1 else ".pdf")
 
-                                    dadosiptu = [codigocliente, linha[NrIPTU], anoextracao]
-
-                                    baixado = site.pegaarquivobaixado(tempoesperadownload, 1)
-                                    if baixado:
-                                        baixado = os.path.join(site.caminhodownload, baixado)
-                                    else:
-                                        baixado = ''
-
-                                    if len(baixado) > 0:
-                                        caminhodestino = aux.to_raw(caminhodestino)
-                                        aux.adicionarcabecalhopdf(baixado, caminhodestino, codigocliente, codigobarras=False)
-
+                                                    aux.adicionarcabecalhopdf(caminho_arquivo,
+                                                                              novonomearquivo,
+                                                                              codigocliente,
+                                                                              codigobarras=False)
                                 else:
                                     dadosiptu = [codigocliente, linha[NrIPTU], anoextracao, 'Verificar (Extrair Manualmente)']
 
