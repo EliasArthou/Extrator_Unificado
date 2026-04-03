@@ -1,10 +1,13 @@
 import datetime
 import web
 import auxiliares as aux
-import sensiveis as senha
 import sys
 import messagebox as msg
+import os
+from dotenv import load_dotenv
 
+# Carrega as variáveis do arquivo .env
+load_dotenv()
 
 Codigo = 0
 NrIPTU = 1
@@ -24,11 +27,7 @@ def taxabombeiro(objeto, linha):
     try:
         gerarboleto = not objeto.somentevalores.get()
 
-        # objeto.listachaves = ['Cod Cliente', 'Nº CBMERJ', 'Área Construída', 'Utilização', 'Faixa', 'Proprietário', 'Endereço',
-        #                     'taxa[anos_em_debito]', 'taxa[Exercicio]', 'taxa[Parcela]', 'taxa[Vencimento]', 'taxa[Valor]',
-        #                     'taxa[Mora]', 'taxa[Total]', 'Status']
-        # objeto.listaexcel = []
-        site = web.TratarSite(senha.siteCBM, senha.nomeprofileCBM)
+        site = web.TratarSite(os.getenv('SITECBM'), os.getenv('NOMEPROFILECBM'))
 
         # for indice, linha in enumerate(objeto.resultado):
 
@@ -51,17 +50,17 @@ def taxabombeiro(objeto, linha):
                         # Fecha o site
                         site.fecharsite()
                     # Carrega o site na memória
-                    site = web.TratarSite(senha.siteCBM, senha.nomeprofileCBM)
+                    site = web.TratarSite(os.getenv('SITECBM'), os.getenv('NOMEPROFILECBM'))
                     # Inicia o browser carregado na memória
                     site.abrirnavegador()
                     # Verifica se não carregou ou abriu o site errado
-                    if site.url != senha.siteCBM or site is None:
+                    if site.url != os.getenv('SITECBM') or site is None:
                         # Verifica se o chrome está aberta
                         if site is not None:
                             # Fecha o site
                             site.fecharsite()
                         # Carrega o site na memória
-                        site = web.TratarSite(senha.siteCBM, senha.nomeprofileCBM)
+                        site = web.TratarSite(os.getenv('SITECBM'), os.getenv('NOMEPROFILECBM'))
                         # Inicia o browser carregado na memória
                         site.abrirnavegador()
 
@@ -98,7 +97,7 @@ def taxabombeiro(objeto, linha):
                                     # Fecha o site
                                     site.fecharsite()
                                 # Reabre o navegador na página de busca por código IPTU
-                                site = web.TratarSite(senha.siteporCBM, senha.nomeprofileCBM)
+                                site = web.TratarSite(os.getenv('SITEPORCBM'), os.getenv('NOMEPROFILECBM'))
                                 # Inicia o navegador
                                 site.abrirnavegador()
                                 if site is not None and site.navegador != -1:
@@ -127,7 +126,7 @@ def taxabombeiro(objeto, linha):
 
                             if resolveucaptcha and len(mensagemerro) == 0:
                                 # Verifica se está na página de geração de boletos
-                                if site.url == senha.siteCBM:
+                                if site.url == os.getenv('SITECBM'):
                                     # Área de retorno dos campos de informação do imposto
                                     # ==================================================================================================================================
                                     # Tabela de dados exclusivas do imóvel
@@ -194,7 +193,7 @@ def taxabombeiro(objeto, linha):
                                                         # Vai para a última aba
                                                         site.irparaaba(site.num_abas())
                                                         # Verifica se está na tela do boleto
-                                                        if site.navegador.current_url == senha.telaboletoCBM:
+                                                        if site.navegador.current_url == os.getenv('TELABOLETOCBM'):
                                                             # Botão de impressão
                                                             imprimir = site.verificarobjetoexiste('CLASS_NAME', 'no_print')
                                                             # Verifica se o botão de impressão existe

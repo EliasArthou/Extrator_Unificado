@@ -7,7 +7,10 @@ import tkinter as tk
 from tkinter import ttk
 import extracao
 import auxiliares as aux
+from dotenv import load_dotenv
 
+# Carrega as variáveis do arquivo .env
+load_dotenv()
 
 class App(tk.Tk):
     """

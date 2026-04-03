@@ -21,11 +21,14 @@ from a_selenium2df import get_df
 from a_selenium_iframes_crawler import Iframes
 import auxiliares as aux
 import messagebox
-import sensiveis as senhas
 import requests
 import re
 from weasyprint import HTML
+import base64
+from dotenv import load_dotenv
 
+# Carrega as variáveis do arquivo .env
+load_dotenv()
 
 class TratarSite:
     """
@@ -170,43 +173,70 @@ class TratarSite:
 
     def verificarobjetoexiste(self, identificador, endereco, valorselecao='', itemunico=True, iraoobjeto=False,
                               sotestar=False, buscar_em_iframes=False, esperar_clicavel=False, elemento_pai=None):
-        if self.navegador is not None:
-            original_window = self.navegador.current_window_handle
-            try:
-                elemento = self.buscar_elemento(identificador, endereco, valorselecao, itemunico, iraoobjeto, sotestar,
-                                                elemento_pai)
-                if elemento:
-                    if esperar_clicavel:
-                        if itemunico:
-                            elemento = self.verificar_objeto_clicavel(identificador, endereco)
-                        else:
-                            elementos = [self.verificar_objeto_clicavel(identificador, endereco) for el in elemento]
-                            return [el for el in elementos if el is not None]
-                    return elemento if not sotestar else True
-                else:
-                    return [] if itemunico is False else (False if sotestar else None)
-            except (NoSuchElementException, TimeoutException):
-                if buscar_em_iframes:
-                    iframes = Iframes(driver=self.navegador, By=By, WebDriverWait=WebDriverWait, expected_conditions=EC)
-                    iframes = iframes.iframes.items()
-                    elementos_encontrados = []
-                    for key, iframe_path in iframes:
-                        for iframe in iframe_path:
-                            self.navegador.switch_to.frame(iframe)
+        """
+        Verifica se um objeto existe, seja no documento principal ou dentro de iframes.
+
+        :param identificador: Tipo de identificador (ID, NAME, CLASS_NAME, etc.).
+        :param endereco: Endereço do identificador.
+        :param valorselecao: Texto ou valor a ser selecionado, se aplicável.
+        :param itemunico: Se True, retorna apenas o primeiro elemento encontrado.
+        :param iraoobjeto: Se True, executa um clique no objeto encontrado.
+        :param sotestar: Se True, apenas testa a existência do elemento.
+        :param buscar_em_iframes: Se True, busca elementos dentro de iframes se não forem encontrados no contexto principal.
+        :param esperar_clicavel: Se True, espera o elemento estar clicável antes de retorná-lo.
+        :param elemento_pai: Elemento pai onde a busca será feita. Caso None, busca no documento principal.
+        :return: Elemento encontrado ou uma lista de elementos. Para elementos em iframes, retorna (iframe, elemento).
+        """
+        if self.navegador is None:
+            return None if itemunico else []
+
+        try:
+            # Busca no contexto principal
+            elemento = self.buscar_elemento(identificador, endereco, valorselecao, itemunico, iraoobjeto, sotestar,
+                                            elemento_pai)
+            if elemento:
+                if esperar_clicavel:
+                    if itemunico:
+                        return self.verificar_objeto_clicavel(identificador, endereco)
+                    return [self.verificar_objeto_clicavel(identificador, endereco) for el in elemento]
+                return elemento if not sotestar else bool(elemento)
+
+            # Se `buscar_em_iframes` está habilitado e a busca no contexto principal não retornou nada
+            if buscar_em_iframes:
+                iframes = Iframes(driver=self.navegador, By=By, WebDriverWait=WebDriverWait,
+                                  expected_conditions=EC).iframes.items()
+                elementos_encontrados = []
+
+                for key, iframe_path in iframes:
+                    for iframe in iframe_path:
+                        self.navegador.switch_to.frame(iframe)
+                        try:
                             elementos = self.buscar_elemento(identificador, endereco, valorselecao, itemunico,
                                                              iraoobjeto, sotestar)
                             if elementos:
                                 if esperar_clicavel:
-                                    elementos = [(iframe, self.verificar_objeto_clicavel(identificador, endereco)) for
-                                                 elemento in elementos]
-                                    elementos = [el for el in elementos if el[1] is not None]
-                                else:
-                                    elementos = [(iframe, elemento) for elemento in elementos]
+                                    elementos = [self.verificar_objeto_clicavel(identificador, endereco) for el in
+                                                 elementos]
+                                # Retorna o elemento junto com o iframe para alternar contexto mais tarde
+                                elementos = [(iframe, el) for el in
+                                             (elementos if isinstance(elementos, list) else [elementos])]
                                 elementos_encontrados.extend(elementos)
+                                if itemunico:  # Para `itemunico=True`, retorna o primeiro encontrado
+                                    self.navegador.switch_to.default_content()
+                                    return elementos_encontrados[0]
+                        except Exception:
+                            pass
+                        finally:
                             self.navegador.switch_to.default_content()
-                    if elementos_encontrados:
-                        return elementos_encontrados if not sotestar else True
-                return [] if itemunico is False else (False if sotestar else None)
+
+                return elementos_encontrados if not itemunico else (
+                    elementos_encontrados[0] if elementos_encontrados else None)
+
+            return [] if itemunico is False else (False if sotestar else None)
+
+        except Exception as e:
+            print(f"Erro em verificarobjetoexiste: {e}")
+            return None if itemunico else []
 
     def buscar_elemento(self, identificador, endereco, valorselecao='', itemunico=True, iraoobjeto=False,
                         sotestar=False, elemento_pai=None):
@@ -337,7 +367,23 @@ class TratarSite:
             self.navegador.execute_script('window.open("","_self").close()')
 
     def irparaframe(self, frame):
-        self.navegador.switch_to.frame(frame)
+        """
+        Altera o contexto para o iframe especificado, apenas se ainda não estiver nele.
+
+        :param frame: WebElement representando o iframe.
+        """
+        try:
+            # Obtenha o contexto atual
+            current_frame = self.navegador.execute_script("return window.frameElement;")
+
+            # Verifique se já está no iframe desejado
+            if current_frame == frame:
+                print("Já está no iframe especificado. Nenhuma troca necessária.")
+            else:
+                self.navegador.switch_to.frame(frame)
+                print("Mudança para o novo iframe realizada com sucesso.")
+        except Exception as e:
+            print(f"Erro ao tentar trocar para o iframe: {e}")
 
     def sairdoframe(self):
         self.navegador.switch_to.default_content()
@@ -370,7 +416,7 @@ class TratarSite:
         textoerro = ''
         solver = imagecaptcha()
         solver.set_verbose(1)
-        solver.set_key(senhas.chaveanticaptcha)
+        solver.set_key(os.getenv('CHAVEANTICAPTCHA'))
 
         captcha_text = solver.solve_and_return_solution(self.caminho)
 
@@ -421,7 +467,7 @@ class TratarSite:
     def resolvecaptchatipo2(self, chavecaptcha):
         solver = recaptchaV2Proxyless()
         solver.set_verbose(1)
-        solver.set_key(senhas.chaveanticaptcha)
+        solver.set_key(os.getenv('CHAVEANTICAPTCHA'))
         solver.set_website_url(self.navegador.current_url)
         solver.set_website_key(chavecaptcha)
         solver.set_soft_id(0)
@@ -590,9 +636,10 @@ class TratarSite:
 
     def buscarobjetoemdf(self, filtros: dict, atributo: str = None):
         if self.dataframepagina is None:
-            raise ValueError("Dataframe não iniciado!")
+            self.retornarpaginaemdf()
 
         df = self.dataframepagina
+
         query_conditions = []
 
         for key, value in filtros.items():
@@ -666,7 +713,8 @@ class TratarSite:
 
         if isinstance(elementos, list):
             for elemento in elementos:
-                texto_elemento = elemento.text.lower()
+                # texto_elemento = elemento.text.lower()
+                texto_elemento = elemento.text.split("-", 1)[1].strip().lower()
                 texto_de_busca_lower = texto_de_busca.lower()
                 compatibilidade = fuzz.ratio(texto_de_busca_lower, texto_elemento)
 
@@ -699,163 +747,49 @@ class TratarSite:
             return elemento_encontrado
         else:
             print(f"Nenhum elemento encontrado com pelo menos {corte_perc}% de compatibilidade com o item {texto_de_busca}.")
-            if elemento_encontrado:
-                resposta = (f"O elemento mais próximo encontrado foi: {texto_mais_parecido} "
-                            f"com {percentual_de_compatibilidade}% de compatibilidade.")
+            print(f"O elemento mais próximo encontrado foi: {texto_mais_parecido} com {percentual_de_compatibilidade}% de compatibilidade.")
+            resposta = (f"Nenhum elemento encontrado com pelo menos {corte_perc}% de compatibilidade com o item {texto_de_busca}. \n"
+                        f"O elemento mais próximo encontrado foi: {texto_mais_parecido} com {percentual_de_compatibilidade}% de compatibilidade.")
+            return resposta
 
-                if opcao_encontrada:
-                    resposta = resposta + f" Item selecionado: {texto_option_selecionado}"
-
-                print(resposta)
-            return None
-
-
-    # def monitorar_downloads_sem_href(self, link_elemento, timeout=300, clickscript=False, via_request=False,
-    #                                  url_override=None):
-    #     """
-    #     Monitora ou realiza o download diretamente de um link_elemento.
-    #
-    #     Parâmetros:
-    #     - link_elemento: WebElement que inicia o download.
-    #     - timeout: Tempo máximo (em segundos) para aguardar o download.
-    #     - clickscript: Se True, usa `execute_script` para clicar no elemento.
-    #     - via_request: Se True, realiza o download via `requests` ao invés de clicar no link.
-    #     - url_override: URL manual para realizar o download, usado em redirecionamentos.
-    #
-    #     Retorna:
-    #     - O caminho completo do arquivo baixado ou None em caso de falha.
-    #     """
-    #     print("Iniciando monitoramento/download...")
-    #
-    #     if not via_request:
-    #         # Modo padrão: clique no elemento e monitoramento
-    #         if not clickscript:
-    #             link_elemento.click()
-    #         else:
-    #             self.navegador.execute_script("arguments[0].click()", link_elemento)
-    #
-    #         time.sleep(2)
-    #         print("Clique disparado. Monitorando logs e pasta de downloads...")
-    #
-    #         tempo_inicio = time.time()
-    #         download_guid = None
-    #         suggested_filename = None
-    #         arquivo_final = None
-    #
-    #         while time.time() - tempo_inicio < timeout:
-    #             logs = self.navegador.get_log("performance")
-    #             for log in logs:
-    #                 message = json.loads(log["message"])
-    #                 method = message["message"]["method"]
-    #                 print(message)
-    #
-    #                 # Detecta abertura de uma nova janela (window.open)
-    #                 if method == "Page.windowOpen":
-    #                     params = message["message"]["params"]
-    #                     url_opened = params.get("url")
-    #                     print(f"Nova janela detectada: URL={url_opened}")
-    #                     # Confirma se o URL é de download e redireciona para request
-    #                     if "boleto" in url_opened.lower():
-    #                         print(f"Detectado comportamento de redirecionamento para download: {url_opened}")
-    #                         return self.monitorar_downloads_sem_href(
-    #                             link_elemento=None, timeout=timeout, clickscript=False, via_request=True,
-    #                             url_override=url_opened
-    #                         )
-    #
-    #                 # Detecta início do download
-    #                 if method == "Page.downloadWillBegin":
-    #                     params = message["message"]["params"]
-    #                     download_guid = params.get("guid")
-    #                     suggested_filename = params.get("suggestedFilename")
-    #                     print(f"Download iniciado: GUID={download_guid}, Nome sugerido={suggested_filename}")
-    #
-    #                 # Detecta progresso ou finalização
-    #                 if method == "Page.downloadProgress":
-    #                     params = message["message"]["params"]
-    #                     current_guid = params.get("guid")
-    #                     state = params.get("state")
-    #
-    #                     if current_guid == download_guid:
-    #                         if state == "completed":
-    #                             print(f"Download concluído: GUID={current_guid}")
-    #
-    #                             # Identifica o arquivo baixado na pasta
-    #                             arquivos_no_diretorio = os.listdir(self.caminhodownload)
-    #                             candidatos = [
-    #                                 os.path.join(self.caminhodownload, arquivo)
-    #                                 for arquivo in arquivos_no_diretorio
-    #                                 if suggested_filename and arquivo.startswith(suggested_filename.split('.')[0])
-    #                             ]
-    #
-    #                             if candidatos:
-    #                                 candidatos.sort(key=os.path.getmtime, reverse=True)
-    #                                 arquivo_final = candidatos[0]
-    #                                 print(f"Arquivo baixado identificado: {arquivo_final}")
-    #                                 return arquivo_final
-    #                             else:
-    #                                 print("Arquivo não encontrado na pasta de downloads.")
-    #                                 return None
-    #
-    #                 time.sleep(1)
-    #
-    #         print("Tempo limite para monitoramento excedido.")
-    #         return None
-    #
-    #     else:
-    #         # Exceção: Realiza o download via requests
-    #         href = url_override or (link_elemento.get_attribute("href") if link_elemento else None)
-    #         if not href:
-    #             print("Elemento ou URL manual não fornecido. Não é possível fazer o download via request.")
-    #             return None
-    #
-    #         # Define o nome do arquivo a partir da URL, removendo caracteres inválidos
-    #         suggested_filename = 'baixado.pdf' #re.sub(r'[<>:"/\\|?*]', '_', href.split("/")[-1])
-    #         arquivo_final = os.path.join(self.caminhodownload, suggested_filename)
-    #
-    #         try:
-    #             # Captura os cookies ativos do navegador
-    #             cookies = self.navegador.get_cookies()
-    #             cookies_dict = {cookie['name']: cookie['value'] for cookie in cookies}
-    #
-    #             # Configura o User-Agent do navegador
-    #             headers = {
-    #                 'User-Agent': self.navegador.execute_script("return navigator.userAgent;")
-    #             }
-    #
-    #             # Realiza o download via requests
-    #             print(f"Baixando arquivo diretamente de: {href}")
-    #             response = requests.get(href, headers=headers, cookies=cookies_dict, stream=True, timeout=timeout)
-    #             response.raise_for_status()
-    #
-    #             with open(arquivo_final, "wb") as file:
-    #                 for chunk in response.iter_content(chunk_size=8192):
-    #                     file.write(chunk)
-    #
-    #             print(f"Download concluído via request: {arquivo_final}")
-    #             return arquivo_final
-    #
-    #         except requests.RequestException as e:
-    #             if os.path.isfile(arquivo_final):
-    #                 os.remove(arquivo_final)
-    #             print(f"Erro ao baixar arquivo via requests: {e}")
-    #             return None
 
     def monitorar_downloads_sem_href(self, link_elemento, timeout=300, clickscript=False, via_request=False,
-                                     url_override=None):
+                                     url_override=None, download_area=False, nome_arquivo=''):
         """
         Monitora ou realiza o download diretamente de um link_elemento.
 
         Parâmetros:
         - link_elemento: WebElement que inicia o download.
         - timeout: Tempo máximo (em segundos) para aguardar o download.
-        - clickscript: Se True, usa `execute_script` para clicar no elemento.
-        - via_request: Se True, realiza o download via `requests` ao invés de clicar no link.
+        - clickscript: Se True, usa 'execute_script' para clicar no elemento.
+        - via_request: Se True, realiza o download via 'requests' ao invés de clicar no link.
         - url_override: URL manual para realizar o download, usado em redirecionamentos.
 
         Retorna:
         - O caminho completo do arquivo baixado ou None em caso de falha.
         """
         print("Iniciando monitoramento/download...")
+
+        try:
+            # Verifica se o link_elemento é um 'data:' URL
+            href = url_override or (link_elemento.get_attribute("href") if link_elemento else None)
+            if href and href.startswith("data:application/pdf;base64,"):
+                print("Detectado conteúdo base64. Decodificando e salvando como PDF...")
+                # Extrai a parte base64 do href
+                base64_data = href.split(",")[1]
+
+                # Decodifica o conteúdo e salva como arquivo PDF
+                arquivo_final = os.path.join(self.caminhodownload, nome_arquivo)
+                try:
+                    with open(arquivo_final, "wb") as pdf_file:
+                        pdf_file.write(base64.b64decode(base64_data))
+                    print(f"Arquivo PDF salvo: {arquivo_final}")
+                    return arquivo_final
+                except Exception as e:
+                    print(f"Erro ao salvar o arquivo PDF: {e}")
+                    return None
+        except Exception as e:
+            pass
 
         if not via_request:
             original_abas = len(self.navegador.window_handles)
@@ -865,7 +799,14 @@ class TratarSite:
             if not clickscript:
                 link_elemento.click()
             else:
+                delay = self.delay
                 self.navegador.execute_script("arguments[0].click()", link_elemento)
+                self.delay = 2
+                btngerarboleto1 = self.verificarobjetoexiste(
+                    'ID', 'btnSubmitParcelamentoCartao')
+                self.delay = delay
+                if btngerarboleto1 is not None:
+                    self.navegador.execute_script("arguments[0].click()", btngerarboleto1)
 
             time.sleep(2)
             print("Clique disparado. Monitorando logs e pasta de downloads...")
@@ -922,44 +863,76 @@ class TratarSite:
 
                         # Troca para a nova aba se uma foi aberta
                         if len(self.navegador.window_handles) > original_abas:
-                            self.navegador.switch_to.window(self.navegador.window_handles[-1])
-                            print("Nova aba detectada. Mudando para a nova aba.")
-                            time.sleep(2)
+                            if not nome_arquivo:
+                                self.navegador.switch_to.window(self.navegador.window_handles[-1])
+                                print("Nova aba detectada. Mudando para a nova aba.")
+                                time.sleep(2)
 
-                            # Procura links de download na aba
-                            download_link = self.navegador.execute_script("""
-                                const links = document.querySelectorAll('a, iframe, embed');
-                                for (let link of links) {
-                                    if (link.href && link.href.endsWith('.pdf')) return link.href;
-                                    if (link.src && link.src.endsWith('.pdf')) return link.src;
-                                }
-                                return null;
-                            """)
+                                # Procura links de download na aba
+                                download_link = self.navegador.execute_script("""
+                                    const links = document.querySelectorAll('a, iframe, embed');
+                                    for (let link of links) {
+                                        if (link.href && link.href.endsWith('.pdf')) return link.href;
+                                        if (link.src && link.src.endsWith('.pdf')) return link.src;
+                                    }
+                                    return null;
+                                """)
 
-                            if download_link:
-                                print(f"Link de download encontrado na nova aba: {download_link}")
-                                self.navegador.close()
-                                self.navegador.switch_to.window(self.navegador.window_handles[0])
-                                return self.monitorar_downloads_sem_href(
-                                    link_elemento=None, timeout=timeout, clickscript=False, via_request=True,
-                                    url_override=download_link
-                                )
+                                if download_link:
+                                    print(f"Link de download encontrado na nova aba: {download_link}")
+                                    self.navegador.close()
+                                    self.navegador.switch_to.window(self.navegador.window_handles[0])
+                                    return self.monitorar_downloads_sem_href(
+                                        link_elemento=None, timeout=timeout, clickscript=False, via_request=True,
+                                        url_override=download_link
+                                    )
 
-                            print("Nenhum link de download detectado na nova aba.")
-                            self.navegador.close()
-                            self.navegador.switch_to.window(self.navegador.window_handles[0])
+                                print("Nenhum link de download detectado na nova aba.")
+                            else:
+                                # Identifica o arquivo na pasta de downloads
+                                arquivos_no_diretorio = os.listdir(self.caminhodownload)
+                                candidatos = [
+                                    os.path.join(self.caminhodownload, arquivo)
+                                    for arquivo in arquivos_no_diretorio
+                                    if nome_arquivo and arquivo.startswith(nome_arquivo.split('.')[0])
+                                ]
+                                if candidatos:
+                                    candidatos.sort(key=os.path.getmtime, reverse=True)
+                                    arquivo_final = candidatos[0]
+                                    print(f"Arquivo baixado identificado: {arquivo_final}")
+                                    if len(self.navegador.window_handles) > 1:
+                                        self.navegador.switch_to.window(self.navegador.window_handles[-1])
+                                        self.navegador.close()
+                                        self.navegador.switch_to.window(self.navegador.window_handles[0])
+                                    return arquivo_final
+                                else:
+                                    print("Arquivo não encontrado na pasta de downloads.")
+                                    return None
 
-                time.sleep(1)
+                            # self.navegador.close()
+                            # self.navegador.switch_to.window(self.navegador.window_handles[0])
 
-            print("Tempo limite para monitoramento excedido.")
-            return None
 
         else:
             # Download via requests
             href = url_override or (link_elemento.get_attribute("href") if link_elemento else None)
             if not href:
-                print("Elemento ou URL manual não fornecido. Não é possível fazer o download via request.")
-                return None
+                if not download_area:
+                    print("Elemento ou URL manual não fornecido. Não é possível fazer o download via request.")
+                    return None
+                else:
+                    if download_area:
+                        # Extraindo HTML da área de download
+                        html_content = self.navegador.execute_script("return arguments[0].outerHTML;", link_elemento)
+                        suggested_filename = 'conteudo_baixado.pdf'
+                        arquivo_final = os.path.join(self.caminhodownload, suggested_filename)
+
+                        # Usar a função de conversão de HTML para PDF
+                        print("Convertendo área de download para PDF...")
+                        return self.converte_html_para_pdf(html_content, arquivo_final)
+
+                    else:
+                        return None
 
             # Ajusta URL caso necessário
             if 'visualizar-arquivo' in href:
@@ -996,11 +969,16 @@ class TratarSite:
                     print("O conteúdo não é PDF, convertendo para PDF...")
                     return self.converte_html_para_pdf(response.text, arquivo_final)
 
+
+
             except requests.RequestException as e:
                 if os.path.isfile(arquivo_final):
                     os.remove(arquivo_final)
                 print(f"Erro ao baixar arquivo via requests: {e}")
                 return None
+
+        print("Tempo limite para monitoramento excedido.")
+
 
     def converte_html_para_pdf(self, html_content, output_path):
         """
@@ -1067,3 +1045,41 @@ class TratarSite:
                 print(f"Erro ao processar elemento {idx}: {e}")
 
         return False, candidatos_titulo, candidatos_secundario
+
+    def salvar_pagina_como_pdf(self, output_path, iframe=None):
+        """
+        Salva a página inteira ou o conteúdo de um iframe como PDF.
+
+        Parâmetros:
+        - output_path: Caminho completo onde o PDF será salvo.
+        - iframe: (Opcional) WebElement do iframe a ser salvo.
+
+        Retorna:
+        - Caminho do PDF gerado ou None em caso de falha.
+        """
+        try:
+            # Troca para o contexto do iframe, se fornecido
+            if iframe is not None:
+                self.navegador.switch_to.frame(iframe)
+
+            # Emite o comando para salvar como PDF
+            result = self.navegador.execute_cdp_cmd("Page.printToPDF", {
+                "printBackground": True,  # Inclui o plano de fundo
+                "landscape": False  # Define o modo retrato (True para paisagem)
+            })
+
+            # Decodifica o PDF e salva no caminho especificado
+            with open(output_path, "wb") as f:
+                f.write(base64.b64decode(result['data']))
+
+            print(f"PDF salvo com sucesso em: {output_path}")
+            return output_path
+
+        except Exception as e:
+            print(f"Erro ao salvar página como PDF: {e}")
+            return None
+
+        finally:
+            # Retorna ao contexto principal, se foi trocado
+            if iframe is not None:
+                self.navegador.switch_to.default_content()

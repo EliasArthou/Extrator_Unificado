@@ -5,16 +5,31 @@ Extração de IPTUs
 import os
 import web
 import auxiliares as aux
-import sensiveis as senha
 import sys
 import pandas as pd
 from selenium.webdriver.support.ui import Select
 from datetime import date
 from datetime import datetime
-# import datetime as dt
-# import messagebox as msg
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, parse_qs
+from dotenv import load_dotenv
+import inspect
+
+# Carrega as variáveis do arquivo .env
+load_dotenv()
+
+
+identificador = 0
+Usuario = 1
+Senha = 2
+Administradora = 3
+Condominio = 4
+Apartamento = 5
+Resposta = 6
+CheckArquivo = 7
+CheckErro = 8
+Nomefuncao = 9
+ProblemaLogin = 10
 
 
 Codigo = 0
@@ -39,7 +54,7 @@ def extrairboletos(objeto, linha, nrguia=0, site=None):
 
     try:
         errocarregamentosite = 'Exception: Message TelaSelecao was received; the expected message was SegundaTela.<br />' \
-                               'WebMessage: Message TelaSelecao was received; the expected message was SegundaTela.'
+                            'WebMessage: Message TelaSelecao was received; the expected message was SegundaTela.'
 
         # Define se precisa gerar o boleto
         gerarboleto = not bool(objeto.visual.somentevalores.get())
@@ -49,7 +64,7 @@ def extrairboletos(objeto, linha, nrguia=0, site=None):
         resposta = str(objeto.visual.tipopagamento.get())
 
         if site is None:
-            site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
+            site = web.TratarSite(os.getenv('SITEIPTU'), os.getenv('NOMEPROFILEIPTU'))
         else:
             site.delay = 2
             guias = site.verificarobjetoexiste('CSS_SELECTOR', '[title="Clique aqui para visualizar / imprimir esta guia."]', itemunico=False)
@@ -73,12 +88,12 @@ def extrairboletos(objeto, linha, nrguia=0, site=None):
             if guias is None:
                 if site is not None:
                     site.fecharsite()
-                site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
+                site = web.TratarSite(os.getenv('SITEIPTU'), os.getenv('NOMEPROFILEIPTU'))
                 site.abrirnavegador()
-                if site.url != senha.siteiptu or site is None:
+                if site.url != os.getenv('SITEIPTU') or site is None:
                     if site is not None:
                         site.fecharsite()
-                    site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
+                    site = web.TratarSite(os.getenv('SITEIPTU'), os.getenv('NOMEPROFILEIPTU'))
                     site.abrirnavegador()
 
             if site is not None and site.navegador != -1:
@@ -86,7 +101,7 @@ def extrairboletos(objeto, linha, nrguia=0, site=None):
                 inscricao = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_inscricao_input')
                 if inscricao is not None:
                     inscricao.send_keys(linha[NrIPTU])
-                    if site.url == senha.siteiptu:
+                    if site.url == os.getenv('SITEIPTU'):
                         # Botão pra entrar na área de boletos
                         botaogerar = site.verificarobjetoexiste('NAME', 'ctl00$ePortalContent$DefiniGuia')
                         if botaogerar is not None:
@@ -104,7 +119,7 @@ def extrairboletos(objeto, linha, nrguia=0, site=None):
                                     while mensagemerro.text == errocarregamentosite:
                                         if site is not None:
                                             site.fecharsite()
-                                        site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
+                                        site = web.TratarSite(os.getenv('SITEIPTU'), os.getenv('NOMEPROFILEIPTU'))
                                         site.abrirnavegador()
 
                                         if site is not None and site.navegador != -1:
@@ -113,7 +128,7 @@ def extrairboletos(objeto, linha, nrguia=0, site=None):
                                             if inscricao is not None:
                                                 inscricao.clear()
                                                 inscricao.send_keys(linha[NrIPTU])
-                                                if site.url == senha.siteiptu:
+                                                if site.url == os.getenv('SITEIPTU'):
                                                     botaogerar = site.verificarobjetoexiste('NAME', 'ctl00$ePortalContent$DefiniGuia')
                                                     if botaogerar is not None:
                                                         if getattr(sys, 'frozen', False):
@@ -187,7 +202,7 @@ def extrairboletos(objeto, linha, nrguia=0, site=None):
 
                                         for index, valor in enumerate(valores):
                                             dadosiptuintermediario = [codigocliente, linha[NrIPTU], guiaexercicio, str(index + 1), valor.text,
-                                                                      contribuinte, endereco, 'Ok']
+                                                                    contribuinte, endereco, 'Ok']
                                             if dadosiptuintermediario:
                                                 dadosiptu.append(dadosiptuintermediario)
                                     case _:
@@ -206,94 +221,30 @@ def extrairboletos(objeto, linha, nrguia=0, site=None):
                                                 else:
                                                     site.navegador.execute_script("arguments[0].click()", confirmar)
 
-                                                if site.navegador.current_url == senha.telaboletoIPTU:
-                                                    linkdownload = site.verificarobjetoexiste('LINK_TEXT', 'aqui')
+                                                if site.navegador.current_url == os.getenv('TELABOLETOIPTU'):
+                                                    linkdownload = site.verificarobjetoexiste('LINK_TEXT', 'aqui', esperar_clicavel=True)
                                                     if linkdownload:
-                                                        # if botaogerar is not None:
-                                                        #     if getattr(sys, 'frozen', False):
-                                                        #         linkdownload.click()
-                                                        #     else:
-                                                        #         site.navegador.execute_script("arguments[0].click()", linkdownload)
-
-                                                        for i, boleto in enumerate(linkdownload, start=1):
-                                                            if botaogerar is not None:
-                                                                if getattr(sys, 'frozen', False):
-                                                                    caminho_arquivo = site.monitorar_downloads_sem_href(
-                                                                        link_elemento=boleto,
-                                                                        timeout=120,
-                                                                        clickscript=not(getattr(sys, 'frozen', False))
-                                                                    )
-                                                                    if caminho_arquivo:
-                                                                        novonomearquivo = os.path.join(
-                                                                            objeto.pastadownload,
-                                                                            codigocliente) + (
-                                                                                f"_{i - 1}.pdf" if i > 1 else ".pdf")
+                                                        if botaogerar is not None:
+                                                            caminho_arquivo = site.monitorar_downloads_sem_href(
+                                                                    link_elemento=linkdownload,
+                                                                    timeout=120,
+                                                                    nome_arquivo='iptu.pdf'
+                                                                    # clickscript=not(getattr(sys, 'frozen', False))
+                                                                )
+                                                            if caminho_arquivo:
+                                                                # novonomearquivo = os.path.join(
+                                                                #     objeto.pastadownload,
+                                                                #     codigocliente) + ".pdf"
 
 
-                                                                        aux.adicionarcabecalhopdf(caminho_arquivo,
-                                                                                                  novonomearquivo,
-                                                                                                  codigocliente,
-                                                                                                  codigobarras=False)
-                                                            else:
-                                                                print(f"Falha ao capturar o arquivo baixado para o boleto {i}.")
-
-                                if nrguia == 0 and len(guias):
-                                    for indice, guia in enumerate(guias):
-                                        if site is not None:
-                                            site.fecharsite()
-                                            site = None
-                                        dadosiptutemp, dftemp = extrairboletos(objeto, linha, indice, site)
-                                        if dadosiptutemp is not None:
-                                            if len(dadosiptutemp) > 0:
-                                                if dadosiptu is None:
-                                                    # self.listadados.extend(sublist for sublist in dadosiptu)
-                                                    dadosiptu = []
-                                                    dadosiptu.extend(sublist for sublist in dadosiptutemp)
-                                                    # dadosiptu = dadosiptutemp
-                                                else:
-                                                    dadosiptu.extend(sublist for sublist in dadosiptutemp)
-                                                    # dadosiptu.append(dadosiptutemp)
-
-                                        if dftemp is not None:
-                                            if len(dftemp) > 0:
-                                                if df is None:
-                                                    df = dftemp
-                                                else:
-                                                    df = pd.concat([df, dftemp], ignore_index=True)
-
-                    else:
-                        guiaexercicio = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_Guia1')
-                        if guiaexercicio is None:
-                            guiaexercicio = ''
-                        else:
-                            guiaexercicio = guiaexercicio.accessible_name
-                            guiaexercicio = guiaexercicio.split("/")[-1]
-
-                        contribuinte = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_CONTRIBUINTE')
-                        if contribuinte is None:
-                            contribuinte = ''
-                        else:
-                            contribuinte = contribuinte.text
-
-                        endereco = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_TELA_ENDERECO')
-                        if endereco is None:
-                            endereco = ''
-                        else:
-                            endereco = endereco.text
-
-                        valoresimpostotela = site.verificarobjetoexiste('CSS_SELECTOR', '[class ="ValorDevido col bordas"]', itemunico=False)
-
-                        if valoresimpostotela is not None:
-                            for valortela in valoresimpostotela:
-                                if valortela is not None:
-                                    if len(valortela.text) > 0:
-                                        valor = valortela.text
-                                        valor = valor.replace('.', '')
-                                        valor = valor.replace(',', '.')
-                                        if float(valor) == 0:
-                                            dadosiptu.append([codigocliente, linha[NrIPTU], guiaexercicio, '0', '0,00', contribuinte, endereco, 'Sem Guia (Provável Isento)'])
-                                        else:
-                                            dadosiptu.append([codigocliente, linha[NrIPTU], guiaexercicio, '0', valor, contribuinte, endereco, 'Verificar (Extrair Manualmente)'])
+                                                                aux.adicionarcabecalhopdf(caminho_arquivo,
+                                                                                        caminhodestino,
+                                                                                        codigocliente,
+                                                                                        codigobarras=False)
+                                                        else:
+                                                            print(f"Falha ao capturar o arquivo baixado para o boleto.\n"
+                                                        f"Função: {inspect.currentframe().f_code.co_name} \n"
+                                                        f"Cliente: {linha[identificador]}")
 
         if df is None or len(dadosiptu) == 0:
             if os.path.isfile(caminhodestino) and salvardadospdf:
@@ -314,6 +265,7 @@ def extrairboletos(objeto, linha, nrguia=0, site=None):
             # objeto.bd.adicionardf('Codigos IPTUs', df, 7)
         if site is not None:
             site.fecharsite()
+
 
         if df is None:
             return dadosiptu, None
@@ -343,7 +295,7 @@ def extrairnadaconsta(objeto, linha, dataatual=''):
             dataatual = aux.hora('America/Sao_Paulo', 'DATA')
             anoextracao = str(dataatual.year)
 
-        site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
+        site = web.TratarSite(os.getenv('SITEIPTU'), os.getenv('NOMEPROFILEIPTU'))
 
         codigocliente = linha[Codigo]
         caminhodestino = objeto.pastadownload + '/' + str(codigocliente) + '_' + str(linha[NrIPTU]) + '.pdf'
@@ -351,10 +303,10 @@ def extrairnadaconsta(objeto, linha, dataatual=''):
         # Verifica se o arquivo já existe e se não está pedindo pra pegar as informações do site
         # Se o arquivo existir ele pega as informações do arquivo
         if not os.path.isfile(caminhodestino) or not gerarboleto:
-            if site.url != senha.sitenadaconsta or site is None:
+            if site.url != os.getenv('SITENADACONSTA') or site is None:
                 if site is not None:
                     site.fecharsite()
-                site = web.TratarSite(senha.sitenadaconsta, senha.nomeprofileIPTU)
+                site = web.TratarSite(os.getenv('SITENADACONSTA'), os.getenv('NOMEPROFILEIPTU'))
                 site.abrirnavegador()
 
             if site is not None and site.navegador != -1:
@@ -370,7 +322,7 @@ def extrairnadaconsta(objeto, linha, dataatual=''):
                         # selected_value = combobox.first_selected_option.get_attribute("value")
                     else:
                         anoextracao = str(dataatual.year)
-                    if site.url == senha.sitenadaconsta:
+                    if site.url == os.getenv('SITENADACONSTA'):
                         botaogerar = site.verificarobjetoexiste('ID', 'Avancar')
                         if botaogerar is not None:
                             if getattr(sys, 'frozen', False):
@@ -389,9 +341,8 @@ def extrairnadaconsta(objeto, linha, dataatual=''):
                                             if getattr(sys, 'frozen', False):
                                                 caminho_arquivo = site.monitorar_downloads_sem_href(
                                                     link_elemento=boleto,
-                                                    timeout=120,
-                                                    clickscript=not (getattr(sys, 'frozen', False))
-                                                )
+                                                    timeout=120)
+
                                                 if caminho_arquivo:
                                                     novonomearquivo = os.path.join(
                                                         objeto.pastadownload,
@@ -449,6 +400,7 @@ def extraircertidaonegativa(objeto, linha, dataatual=''):
     site = None
     dadosiptu = []
     df = None
+    dfdivida = None
 
     contartentativas = 0
     limitetentativas = 30
@@ -464,19 +416,26 @@ def extraircertidaonegativa(objeto, linha, dataatual=''):
         anoextracao = str(dataatual.year)
 
     codigocliente = linha[Codigo]
-    caminhodestino = objeto.pastadownload + '/certidao_' + str(codigocliente) + '_' + str(linha[NrIPTU]) + '.pdf'
+    caminhodestino = 'certidao_' + str(codigocliente) + '_' + str(linha[NrIPTU]) + '.pdf'
 
     objeto.visual.mudartexto('labelstatus', 'Extraindo boleto...')
 
-    if not os.path.isfile(caminhodestino):
+    pasta_com_divida = os.path.join(objeto.pastadownload, "Com_Divida")
+    pasta_sem_divida = os.path.join(objeto.pastadownload, "Sem_Divida")
+
+    # Criar pastas de destino
+    os.makedirs(pasta_com_divida, exist_ok=True)
+    os.makedirs(pasta_sem_divida, exist_ok=True)
+    caminho_arquivo = aux.is_valid_file_in_path(caminhodestino, objeto.pastadownload)
+    if not caminho_arquivo:
         while not problemacarregamento and not resolveu:
             textoerro = ''
             if site is not None:
-                if site.navegador.current_url != senha.sitecertidaoefipeutica:
+                if site.navegador.current_url != os.getenv('SITECERTIDAOENFITEUTICA'):
                     site.fecharsite()
                     site = None
             if site is None:
-                site = web.TratarSite(senha.sitecertidaoefipeutica, senha.nomeprofileIPTU)
+                site = web.TratarSite(os.getenv('SITECERTIDAOENFITEUTICA'), os.getenv('NOMEPROFILEIPTU'))
                 site.abrirnavegador()
                 if site.navegador is not None:
                     # Use o método find() para encontrar o primeiro objeto com a formatação desejada
@@ -488,7 +447,7 @@ def extraircertidaonegativa(objeto, linha, dataatual=''):
                             textoerro = objeto_encontrado.text.strip()
 
             if site is not None and site.navegador != -1:
-                if site.url == senha.sitecertidaoefipeutica and site.navegador.title != 'Request Rejected':
+                if site.url == os.getenv('SITECERTIDAOENFITEUTICA') and site.navegador.title != 'Request Rejected':
                     # Campo de Inscrição da tela Inicial
                     inscricao = site.verificarobjetoexiste('NAME', 'inscricao')
                     if str(linha[NrIPTU]).strip() != '':
@@ -519,39 +478,53 @@ def extraircertidaonegativa(objeto, linha, dataatual=''):
                                             mensagemerro = site.verificarobjetoexiste('ID', 'ctl00_ePortalContent_MSG')
                                             site.delay = 10
                                             if mensagemerro is None:
-                                                botaoimpressao = site.verificarobjetoexiste('ID', 'btimprimir')
-                                                if botaoimpressao is not None:
-                                                    arquivos_originais = site.obter_arquivos_atuais(site.caminhodownload)
-                                                    botaoimpressao.click()
-                                                    arquivobaixado = site.esperar_novo_download(site.caminhodownload, arquivos_originais)
+                                                if site.navegador.current_url == 'https://www2.rio.rj.gov.br/smf/iptucertfiscal/default.asp':
+                                                    caminho_arquivo = os.path.join(objeto.pastadownload, caminhodestino)
+                                                    site.salvar_pagina_como_pdf(caminho_arquivo)
 
-                                                    # Verifica se o arquivo baixado de fato existe
-                                                    if os.path.isfile(site.caminhodownload + '\\' + arquivobaixado):
-                                                        aux.adicionarcabecalhopdf(site.caminhodownload + '\\' + arquivobaixado, caminhodestino, aux.left(codigocliente, 4), posicao_y = 10)
+                                                    if caminho_arquivo:
+                                                        dfdivida = aux.extrairtextopdf(caminho_arquivo,'DIVIDAS')
+                                                        if dfdivida is not None:
+                                                            if dfdivida['Possui_Divida']:
+                                                                novonomearquivo = os.path.join(objeto.pastadownload,
+                                                                pasta_com_divida,
+                                                                caminhodestino)
+                                                            else:
+                                                                novonomearquivo = os.path.join(objeto.pastadownload,
+                                                                    pasta_sem_divida,
+                                                                    caminhodestino)
+                                                        else:
+                                                            novonomearquivo = os.path.join(
+                                                                caminhodestino,
+                                                                caminhodestino)
 
-                                                else:
-                                                    dadosiptu = [codigocliente, linha[NrIPTU], anoextracao, 'Verificar (Extrair Manualmente)']
+                                                        if os.path.isfile(caminho_arquivo):
+                                                            aux.adicionarcabecalhopdf(caminho_arquivo,
+                                                                                          novonomearquivo,
+                                                                                          aux.left(codigocliente, 4)
+                                                                                      )
+                                                    else:
+                                                        dadosiptu = [codigocliente, linha[NrIPTU], anoextracao, 'Verificar (Extrair Manualmente)', dfdivida['Possui_Divida']]
 
                                             else:
-                                                dadosiptu = [codigocliente, linha[NrIPTU], anoextracao, mensagemerro.text]
+                                                dadosiptu = [codigocliente, linha[NrIPTU], anoextracao, mensagemerro.text, 'N/A']
 
                                         else:
-                                            dadosiptu = [codigocliente, linha[NrIPTU], anoextracao, 'Problema Captcha']
+                                            dadosiptu = [codigocliente, linha[NrIPTU], anoextracao, 'Problema Captcha', 'N/A']
                                     else:
-                                        dadosiptu = [codigocliente, linha[NrIPTU], anoextracao, 'Inscrição inválida!']
+                                        dadosiptu = [codigocliente, linha[NrIPTU], anoextracao, 'Inscrição inválida!', 'N/A']
                                         resolveu = True
                     else:
-                        dadosiptu = [codigocliente, linha[NrIPTU], anoextracao, 'Inscrição inválida!']
+                        dadosiptu = [codigocliente, linha[NrIPTU], anoextracao, 'Inscrição inválida!', 'N/A']
                         resolveu = True
-
-    # if os.path.isfile(caminhodestino) and salvardadospdf:
-    if os.path.isfile(caminhodestino):
+    caminho_arquivo = caminhodestino if not caminho_arquivo else caminho_arquivo
+    if os.path.isfile(caminho_arquivo):
         listacodigo = []
         # listatipopag = []
         listaarquivo = []
-
+        caminho = caminhodestino if os.path.isfile(caminhodestino) else caminho_arquivo
         listacodigo.append("'" + codigocliente + "'")
-        listaarquivo.append("'" + caminhodestino + "'")
+        listaarquivo.append("'" + caminho + "'")
 
         df = {'Codigo': listacodigo, 'Arquivo': listaarquivo}
         df = pd.DataFrame(df)
@@ -565,100 +538,74 @@ def extraircertidaonegativa(objeto, linha, dataatual=''):
 
 def extrairbombeiros(objeto, linha, dataatual=''):
     """
-    : param linha: a linha de dados a ser analisada.
-    : param objeto: janela a ser manipulada.
+    Extrai boletos de bombeiros e interage com o CAPTCHA.
     """
     site = None
     dadosbombeiros = []
     df = None
-
-    contartentativas = 0
-    limitetentativas = 30
-    problemacarregamento = False
     resolveucaptcha = False
-
-    # try:
-    gerarboleto = not bool(objeto.visual.somentevalores.get())
 
     if dataatual == '':
         dataatual = aux.hora('America/Sao_Paulo', 'DATA')
 
-    if dataatual:
-        anoextracao = str(dataatual.year)
-
     codigocliente = linha[Codigo]
-    caminhodestino = objeto.pastadownload + '/' + codigocliente + '_' + linha[NrCBM] + '.pdf'
+    caminhodestino = os.path.join(objeto.pastadownload, f"{codigocliente}_{linha[NrCBM]}.pdf")
 
-    site = web.TratarSite(senha.siteiptu, senha.nomeprofileIPTU)
-
-    objeto.visual.mudartexto('labelstatus', 'Extraindo boleto...')
+    # Inicializa o site
+    site = web.TratarSite(os.getenv('SITECBM'), os.getenv('NOMEPROFILECBM'))
 
     if not os.path.isfile(caminhodestino):
-        while not resolveucaptcha: #and aux.hora('America/Sao_Paulo', 'HORA') < dt.time(23, 59, 00):
-            # Variável que vai receber o texto de erro do site (caso exista)
-            texto = ''
-            # Verifica a hora para entrar no site, caso esteja fora do horário válido, nem inicia
-            # if aux.hora('America/Sao_Paulo', 'HORA') < dt.time(22, 00, 00):
-            # Verifica se o chrome está aberta
-            if site is not None:
-                # Fecha o site
-                site.fecharsite()
-            # Carrega o site na memória
-            site = web.TratarSite(senha.siteCBM, senha.nomeprofileCBM)
-            # Inicia o browser carregado na memória
+        while not resolveucaptcha:
             site.abrirnavegador()
-            # Verifica se não carregou ou abriu o site errado
-            if site.url != senha.siteCBM or site is None:
-                # Verifica se o chrome está aberta
-                if site is not None:
-                    # Fecha o site
-                    site.fecharsite()
-                # Carrega o site na memória
-                site = web.TratarSite(senha.siteCBM, senha.nomeprofileCBM)
-                # Inicia o browser carregado na memória
-                site.abrirnavegador()
 
-            if site is not None and site.navegador != -1:
-                # Carrega a página num dataframe
-                # site.retornarpaginaemdf()
-                # Campo de Inscrição da tela Inicial
-                inscricao = site.verificarobjetoexiste('ID', 'cbmerj', buscar_em_iframes=True)
-                # inscricao = site.buscarobjetoemdf({'id': 'cbmerj'})
+            # Buscar os campos de inscrição e dígito verificador
+            inscricao_result = site.verificarobjetoexiste('NAME', 'cbmerj', buscar_em_iframes=True)
+            dv_result = site.verificarobjetoexiste('NAME', 'cbmerj_dv', buscar_em_iframes=True)
 
-                # Campo de dígito verificador
-                dv = site.verificarobjetoexiste('ID', 'cbmerj_dv', buscar_em_iframes=True)
-                # dv = site.buscarobjetoemdf({'id': 'cbmerj_dv'})
+            if inscricao_result and dv_result:
+                # Processar inscrição
+                iframe_inscricao, inscricao = inscricao_result if isinstance(inscricao_result, tuple) else (None, inscricao_result)
+                iframe_dv, dv = dv_result if isinstance(dv_result, tuple) else (None, dv_result)
 
-                # Testa se tem os dois campos supracitados
-                if inscricao is not None and dv is not None:
-                    # "Limpa" o campo de inscrição
+                if iframe_inscricao:
+                    site.irparaframe(iframe_inscricao)
                     inscricao.clear()
-                    # Preenche o campo de inscrição com os dados do banco de dados (sem o dígito verificador)
                     inscricao.send_keys(aux.left(linha[NrCBM], 7))
-                    # "Limpa" o campo do dígito verificador
+
+                # if iframe_dv:
+                #     site.irparaframe(iframe_dv)
                     dv.clear()
-                    # Preenche o campo do dígito verificador com os dados do banco de dados
                     dv.send_keys(aux.right(linha[NrCBM], 1))
-                    # Pega na URL o chave do CAPTCHA para a resolução
-                    elementocaptcha = site.buscarobjetoemdf({'id': 'recaptcha-token', 'nodeName': 'INPUT', 'value': '^NaN'}, 'baseURI')
 
-                    # Parsear a URL para extrair a parte da query
-                    parsed_url = urlparse(elementocaptcha)
-                    query_params = parse_qs(parsed_url.query)
-                    # Extrair o valor da chave 'k'
-                    k_value = query_params['k'][0]
-                    # Chama a função da solução de CAPTCHA
-                    resposta = site.resolvecaptchatipo2(k_value)
-                    # Se o CAPTCHA retornar valor ele manda a resposta para o text oculto
-                    if resposta is not None:
-                        # Como o text está oculto envio através da execução de script em Javascript
-                        site.navegador.execute_script(f"document.getElementById('g-recaptcha-response').innerHTML = '{resposta}'")
-                        # "Pega" o botão de enviar
-                        botaoenvio = site.verificarobjetoexiste('ID', 'btnEnviar', buscar_em_iframes=True)
-                        if botaoenvio is not None:
-                            # Clica no botão de enviar
-                            botaoenvio.click()
+                # Pegar o elemento captcha
+                elementocaptcha = site.buscarobjetoemdf({'id': 'recaptcha-token', 'nodeName': 'INPUT', 'value': '^NaN'}, 'baseURI')
 
+                if elementocaptcha:
+                    print("CAPTCHA detectado. Resolva manualmente no navegador.")
+
+                    # Pausa o script para que o usuário resolva o CAPTCHA manualmente
+                    input("Pressione Enter aqui após resolver o CAPTCHA e enviar no site...")
+
+                    # Pegar o botão de envio
+                    botaoenvio_result = site.verificarobjetoexiste('ID', 'btnEnviar', buscar_em_iframes=True)
+                    iframe_botaoenvio, botaoenvio = botaoenvio_result if isinstance(botaoenvio_result, tuple) else (None, botaoenvio_result)
+
+                    # Trocar para o iframe do botão, se necessário
+                    if iframe_botaoenvio:
+                        site.irparaframe(iframe_botaoenvio)
+
+                    # Clicar no botão de envio
+                    if botaoenvio:
+                        botaoenvio.click()
+                        resolveucaptcha = True
+                    else:
+                        print("Botão de envio não encontrado.")
+                else:
+                    print("Elemento 'g-recaptcha-response' não encontrado.")
+
+
+            if not resolveucaptcha:
+                print("Tentativa de resolver o CAPTCHA falhou. Tentando novamente...")
 
     else:
         # Mensagem de horário inválido para gerar boleto

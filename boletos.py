@@ -5,6 +5,10 @@ import auxiliares as aux
 import datetime
 import shutil
 import logging
+from dotenv import load_dotenv
+
+# Carrega as variáveis do arquivo .env
+load_dotenv()
 
 
 def barcodereader(completepath, qualidade=300, renomear=True):
@@ -32,30 +36,17 @@ def barcodereader(completepath, qualidade=300, renomear=True):
             infocodigobarras = decode(pagina)
             if infocodigobarras:
                 infocodigobarras = list(filter(lambda x: x.type == 'I25', infocodigobarras))
-
                 if infocodigobarras:
                     codigobarras = infocodigobarras[0].data.decode('ASCII')
                     linhadigitavel = linha_digitavel(codigobarras)
                     if linhadigitavel:
                         valor, vencimento = extrai_info_boleto(linhadigitavel)
                         if vencimento and renomear:
-                            # renomear_arquivo(completepath, vencimento)
                             mover_arquivo_condominio(completepath, vencimento)
-
-                    cliente = ''
 
                     # Obtém o nome do arquivo
                     basename = os.path.basename(completepath)
 
-                    # Encontra a posição do primeiro sublinhado
-                    underscore_index = basename.find('_')
-
-                    # Verifica se há um sublinhado e pega os 4 caracteres após ele, caso contrário, pega os primeiros
-                    # 4 caracteres
-                    # if underscore_index != -1:
-                    #     cliente = basename[underscore_index + 1:underscore_index + 5]
-                    # else:
-                    #     cliente = basename[:4]
                     cliente = basename[:4]
                     dados = [cliente, infocodigobarras[0].data.decode('ASCII'), infocodigobarras[0].type, completepath.replace('/', '\\'),
                              linhadigitavel, valor, vencimento]
@@ -133,12 +124,47 @@ def linha_digitavel(linha):
 
 
 def extrai_info_boleto(linha_digitavel):
-    # Extrai o valor do boleto a partir da linha digitável
+    # Extrai o fator de vencimento e o valor do boleto
     fator_vencimento = int(linha_digitavel[40:44])
-    valor_documento = float(linha_digitavel[46:len(linha_digitavel)]) / 100
-    data_vencimento = (datetime.date(1997, 10, 7) + datetime.timedelta(days=fator_vencimento)).strftime("%d/%m/%Y")
+    valor_documento = float(linha_digitavel[46:]) / 100
 
-    return valor_documento, data_vencimento
+    quant_dias = 50
+    # Data base inicial (antiga)
+    database_inicial = datetime.date(1997, 10, 7)
+
+    # Data atual
+    hoje = datetime.date.today()
+
+    # Calcula quantos blocos de 10.000 dias completos se passaram até (hoje + "quant_dias" dias)
+    blocosdiascorridos = (((hoje + datetime.timedelta(days=quant_dias)) - database_inicial).days) // 10000
+
+    # Calcula as datas base
+    data_base_nova = database_inicial + datetime.timedelta(days=blocosdiascorridos * 10000)
+    data_base_antiga = database_inicial + datetime.timedelta(days=(blocosdiascorridos - 1) * 10000)
+
+    # Define a data limite para comparação (hoje + "quant_dias" dias)
+    limite_data = hoje + datetime.timedelta(days=quant_dias)
+
+    # Calcula as possíveis datas de vencimento
+    data_vencimento_antiga = data_base_antiga + datetime.timedelta(days=fator_vencimento)
+    data_vencimento_nova = data_base_nova + datetime.timedelta(days=fator_vencimento)
+
+    # Calcula a diferença (em dias) entre cada vencimento e a data limite
+    diferenca_antiga = abs((data_vencimento_antiga - limite_data).days)
+    diferenca_nova = abs((data_vencimento_nova - limite_data).days)
+    if diferenca_nova > 950:
+        diferenca_nova = diferenca_nova - 1000
+        fator_vencimento -= 1000
+        data_vencimento_nova = data_base_nova + datetime.timedelta(days=fator_vencimento)
+
+
+    # Seleciona a data de vencimento mais próxima do limite; se empatar, escolhe a nova
+    if diferenca_antiga < diferenca_nova or fator_vencimento > 9970:
+        data_vencimento = data_vencimento_antiga
+    else:
+        data_vencimento = data_vencimento_nova
+
+    return valor_documento, data_vencimento.strftime("%d/%m/%Y")
 
 
 def renomear_arquivo(caminho_atual, vencimento):
@@ -166,11 +192,14 @@ def renomear_arquivo(caminho_atual, vencimento):
 def mover_arquivo_condominio(caminho_atual, vencimento):
     """
     Move o arquivo para uma pasta no formato YYYY_MM se o ano e mês do vencimento forem menores que o ano e mês atuais.
-    Se a pasta não existir, ela será criada. Se o ano e mês forem iguais ou maiores, o arquivo permanece no lugar.
+    Se a pasta não existir, ela será criada. Caso já exista um arquivo com o mesmo nome, ele será renomeado.
 
     Args:
     caminho_atual (str): Caminho atual do arquivo.
     vencimento (str): Data de vencimento no formato DD/MM/AAAA.
+
+    Returns:
+    str: Novo caminho do arquivo, caso movido; ou o caminho original, se não houver movimentação.
     """
     try:
         # Verifica se a data está no formato esperado
@@ -190,11 +219,25 @@ def mover_arquivo_condominio(caminho_atual, vencimento):
             if not os.path.exists(diretorio_destino):
                 os.makedirs(diretorio_destino)
 
+            # Define o caminho completo do destino
+            nome_arquivo = os.path.basename(caminho_atual)
+            caminho_destino = os.path.join(diretorio_destino, nome_arquivo)
+
+            # Verifica se o arquivo já existe e renomeia se necessário
+            base, extensao = os.path.splitext(caminho_destino)
+            contador = 1
+            while os.path.exists(caminho_destino):
+                caminho_destino = f"{base}_{contador}{extensao}"
+                contador += 1
+
             # Move o arquivo para a pasta
-            shutil.move(caminho_atual, diretorio_destino)
-            print(f"Arquivo movido para: {diretorio_destino}")
+            shutil.move(caminho_atual, caminho_destino)
+            print(f"Arquivo movido para: {caminho_destino}")
+            return caminho_destino  # Retorna o novo caminho do arquivo
         else:
             print("O arquivo permanece no local atual.")
+            return caminho_atual  # Retorna o caminho original
 
     except Exception as e:
         logging.error(f"Erro ao mover o arquivo {caminho_atual}: {str(e)}")
+        return caminho_atual  # Retorna o caminho original em caso de erro

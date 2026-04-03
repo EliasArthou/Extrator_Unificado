@@ -13,4 +13,8 @@ sensiveis.py
 main.spec
 favicon.ico
 chromedriver.exe
+.env
 
+__pycache__/
+*.pyc
+poppler-*/

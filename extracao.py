@@ -16,7 +16,11 @@ import condominios
 import Biptu
 import taxabombeiros as bombeiro
 import pandas as pd
+from dotenv import load_dotenv
 
+
+# Carrega as variáveis do arquivo .env
+load_dotenv()
 
 class Extrator:
     def __init__(self, visual):
@@ -37,6 +41,7 @@ class Extrator:
         self.pastadownload = aux.caminhoprojeto() + '\\' + 'Downloads'
         self.listachaves = []
         self.listadados = []
+        self.datames = ''
 
     def controlaextracao(self):
         # try:
@@ -44,16 +49,16 @@ class Extrator:
 
         if os.path.isfile(os.path.join(aux.caminhoprojeto(), 'Scai.WMB')):
             caminhobanco = aux.caminhoselecionado(titulojanela='Selecione o arquivo de banco de dados:',
-                                                  tipoarquivos=[('Banco ' + senha.empresa, '*.WMB'), ('Arquivos Excel', '*.xlsx'), ('Todos os Arquivos:', '*.*')],
+                                                  tipoarquivos=[('Banco ' + os.getenv('EMPRESA'), '*.WMB'), ('Arquivos Excel', '*.xlsx'), ('Todos os Arquivos:', '*.*')],
                                                   caminhoini=aux.caminhoprojeto(), arquivoinicial='Scai.WMB')
         else:
             if os.path.isdir(aux.caminhoprojeto()):
                 caminhobanco = aux.caminhoselecionado(titulojanela='Selecione o arquivo de banco de dados:',
-                                                      tipoarquivos=[('Banco ' + senha.empresa, '*.WMB'), ('Arquivos Excel', '*.xlsx'), ('Todos os Arquivos:', '*.*')],
+                                                      tipoarquivos=[('Banco ' + os.getenv('EMPRESA'), '*.WMB'), ('Arquivos Excel', '*.xlsx'), ('Todos os Arquivos:', '*.*')],
                                                       caminhoini=aux.caminhoprojeto())
             else:
                 caminhobanco = aux.caminhoselecionado(titulojanela='Selecione o arquivo de banco de dados:',
-                                                      tipoarquivos=[('Banco ' + senha.empresa, '*.WMB'), ('Todos os Arquivos:', '*.*')])
+                                                      tipoarquivos=[('Banco ' + os.getenv('EMPRESA'), '*.WMB'), ('Todos os Arquivos:', '*.*')])
 
         if len(caminhobanco) == 0:
             msg.msgbox('Selecione o caminho do Banco de Dados!', msg.MB_OK, 'Erro Banco')
@@ -87,13 +92,13 @@ class Extrator:
 
         match self.extracao:
             case 'Bombeiros':
-                self.sql = senha.sqlcbm
+                self.sql = senha.SQLCBM
 
             case 'Prefeitura':
                 if bool(self.visual.faltantes) and self.visual.tiposervico.get() == 'IPTU':
-                    self.sql = senha.sqliptufaltante
+                    self.sql = senha.SQLIPTUFALTANTE
                 else:
-                    self.sql = senha.sqliptucompleto
+                    self.sql = senha.SQLIPTUCOMPLETO
 
             case 'Condomínios':
                 if self.bd is None:
@@ -102,7 +107,12 @@ class Extrator:
                 if self.visual.iniciodomes.get():
                     self.bd.executarsql('DELETE * FROM BoletosCondominios')
 
-                self.sql = aux.retornarlistaboletos()
+                data = datetime.datetime.now()
+                mes_ano = data.strftime("%m/%Y")
+                self.visual.acertaconfjanela(False)
+                self.datames = aux.criarinputbox('Mês dos Boletos', 'Data de extração dos boletos: (mm/aaaa)', valorinicial=mes_ano)
+                self.visual.acertaconfjanela(True)
+                self.sql = aux.retornarlistaboletos(anomes=self.datames)
 
             case _:
                 msg.msgbox(f'Opção Inválida!', msg.MB_OK, 'Opção não reconhecida!')
@@ -180,37 +190,37 @@ class Extrator:
 
         for indice, linha in enumerate(self.resultado):
             resolveucaptcha = False
-            if aux.hora('America/Sao_Paulo', 'HORA') < datetime.time(23, 59, 00) and self.texto != 'Este serviço encontra-se temporariamente indisponível.':
-                codigocliente = linha[Biptu.Codigo]
-                # ==================== Parte Gráfica =======================================================
-                self.visual.mudartexto('labelcodigocliente', 'Código Cliente: ' + codigocliente)
-                cbm = str(linha[Biptu.NrCBM])
-                cbm = str(cbm.strip()).zfill(8)
-                cbm = '{}{}{}{}{}{}{}-{}'.format(*cbm)
-                self.visual.mudartexto('labelinscricao', 'Inscrição: ' + cbm)
-                self.visual.mudartexto('labelquantidade', 'Item ' + str(indice + 1) + ' de ' + str(len(self.resultado)) + '...')
-                self.visual.mudartexto('labelstatus', 'Extraindo boleto...')
-                # Atualiza a barra de progresso das transações (Views)
-                self.visual.configurarbarra('barraextracao', len(self.resultado), indice + 1)
-                time.sleep(0.1)
-                self.texto = ''
-                # Verifica a hora para entrar no site, caso esteja fora do horário válido, nem inicia
-                # if aux.hora('America/Sao_Paulo', 'HORA') < datetime.time(23, 59, 00):
-                dadosiptu, df = Biptu.extrairbombeiros(self, linha, aux.hora('America/Sao_Paulo', 'DATA'))
+            # if aux.hora('America/Sao_Paulo', 'HORA') < datetime.time(23, 59, 00) and self.texto != 'Este serviço encontra-se temporariamente indisponível.':
+            codigocliente = linha[Biptu.Codigo]
+            # ==================== Parte Gráfica =======================================================
+            self.visual.mudartexto('labelcodigocliente', 'Código Cliente: ' + codigocliente)
+            cbm = str(linha[Biptu.NrCBM])
+            cbm = str(cbm.strip()).zfill(8)
+            cbm = '{}{}{}{}{}{}{}-{}'.format(*cbm)
+            self.visual.mudartexto('labelinscricao', 'Inscrição: ' + cbm)
+            self.visual.mudartexto('labelquantidade', 'Item ' + str(indice + 1) + ' de ' + str(len(self.resultado)) + '...')
+            self.visual.mudartexto('labelstatus', 'Extraindo boleto...')
+            # Atualiza a barra de progresso das transações (Views)
+            self.visual.configurarbarra('barraextracao', len(self.resultado), indice + 1)
+            time.sleep(0.1)
+            self.texto = ''
+            # Verifica a hora para entrar no site, caso esteja fora do horário válido, nem inicia
+            # if aux.hora('America/Sao_Paulo', 'HORA') < datetime.time(23, 59, 00):
+            dadosiptu, df = Biptu.extrairbombeiros(self, linha, aux.hora('America/Sao_Paulo', 'DATA'))
 
-            else:
-                # Mensagem de horário inválido para gerar boleto
-                self.visual.acertaconfjanela(False)
-                # Texto quando o serviço está indisponível
-                if self.texto != 'Este serviço encontra-se temporariamente indisponível.':
-                    # Caso o erro não seja de serviço indisponível o horário é inválido
-                    msg.msgbox('Impossível gerar boletos depois das 22:00!', msg.MB_OK, 'Horário Inválido')
-                else:
-                    # Mensagem de serviço indisponível
-                    msg.msgbox('Serviço fora do ar!', msg.MB_OK, 'Serviço com problemas')
+            # else:
+            #     # Mensagem de horário inválido para gerar boleto
+            #     self.visual.acertaconfjanela(False)
+            #     # Texto quando o serviço está indisponível
+            #     if self.texto != 'Este serviço encontra-se temporariamente indisponível.':
+            #         # Caso o erro não seja de serviço indisponível o horário é inválido
+            #         msg.msgbox('Impossível gerar boletos depois das 22:00!', msg.MB_OK, 'Horário Inválido')
+            #     else:
+            #         # Mensagem de serviço indisponível
+            #         msg.msgbox('Serviço fora do ar!', msg.MB_OK, 'Serviço com problemas')
 
                 # Sai do Looping
-                break
+                # break
 
         # except Exception as e:
         #     with open("Log_" + aux.acertardataatual() + ".txt", "a") as myfile:
@@ -225,6 +235,7 @@ class Extrator:
         # try:
 
         self.listaexcel = []
+
         dataatual = aux.hora('America/Sao_Paulo', 'DATA')
         anoatual = dataatual.year
 
@@ -280,7 +291,7 @@ class Extrator:
         listaboletos = []
         self.visual.acertaconfjanela(False)
 
-        self.listachaves = ['Código', 'Login', 'Senha', 'Administradora', 'Condomínio', 'Unidade', 'Resposta', 'Check de Arquivo', 'CheckErro', 'Nome Função', 'Problema Login']
+        self.listachaves = ['Código', 'Login', 'Senha', 'Administradora', 'Condomínio', 'Unidade', 'Login Múltiplo', 'Resposta', 'Check de Arquivo', 'CheckErro', 'Nome Função', 'Problema Login']
         self.listaexcel = []
 
         self.resultado = self.resultado
@@ -301,7 +312,7 @@ class Extrator:
                     listatemp = getattr(condominios, senha.retornaradministradora('nomereal', linha[condominios.Administradora], 'nomereduzido').lower())(self, linha)
                     if listatemp is not None and len(listatemp) > 0:
                         listaboletos = listaboletos + listatemp
-                    # listaboletos.append(getattr(condominios, senha.retornaradministradora('nomereal', linha[condominios.Administradora], 'nomereduzido').lower())(self, linha))
+
                 else:
                     listatemp = getattr(condominios, multiplas['Site'])(self, linha)
                     if listatemp is not None and len(listatemp) > 0:

@@ -16,7 +16,16 @@ import boletos
 from sqlalchemy import create_engine
 import openpyxl
 import ctypes
+from datetime import datetime
+import re
+import pdfplumber
+from dotenv import load_dotenv
+import json
 from fuzzywuzzy import fuzz
+
+# Carrega as variáveis do arquivo .env
+load_dotenv()
+
 
 # Constantes para SetThreadExecutionState
 ES_CONTINUOUS = 0x80000000
@@ -32,7 +41,7 @@ class Banco:
         self.cursor = None
         self.engine = None
         self.erro = ''
-        self.constr = 'Driver={Microsoft Access Driver (*.mdb, *.accdb)};Dbq=' + caminho + ';Pwd=' + senha.senhabanco
+        self.constr = 'Driver={Microsoft Access Driver (*.mdb, *.accdb)};Dbq=' + caminho + ';Pwd=' + os.getenv('SENHABANCO')
         self.abrirconexao()
 
     def abrirconexao(self):
@@ -600,16 +609,28 @@ def criarinputbox(titulo, mensagem, substituircaracter='', valorinicial=''):
     import tkinter as tk
     from tkinter import simpledialog
 
+    # Cria a janela principal e a retira da tela inicialmente
     root = tk.Tk()
-    root.attributes("-topmost", True)
     root.withdraw()
 
-    # the input dialog
-    user_inp = simpledialog.askstring(title=titulo, prompt=mensagem, initialvalue=valorinicial, show=substituircaracter)
+    # Garante que a janela principal fique "no topo"
+    root.attributes("-topmost", True)
+    root.lift()
+    root.focus_force()
+
+    # Exibe a caixa de diálogo
+    user_inp = simpledialog.askstring(
+        title=titulo,
+        prompt=mensagem,
+        initialvalue=valorinicial,
+        show=substituircaracter
+    )
+
     if user_inp is None:
         user_inp = 0
 
-    root.attributes("-topmost", True)
+    # Encerra a janela principal para liberar recursos
+    root.destroy()
 
     return user_inp
 
@@ -671,8 +692,12 @@ def extrairtextopdf(caminho, tipos):
             p = reader.pages[pagina]
             texto += p.extract_text()
 
+    textooriginal = texto
+    # Normalizando espaços e caracteres
+    texto = re.sub(r'\s+', ' ', texto.lower())
     match tipos.upper():
         case 'BOLETOS':
+            texto = textooriginal
             lista = re.findall(r'([\d]{1}.[\d]{3}.[\d]{3}-[\d]{1})\n[\d]{2}', texto)
             listalimpa = []
             for indice, linha in enumerate(lista):
@@ -771,15 +796,92 @@ def extrairtextopdf(caminho, tipos):
             listalimpa = [f"'{item}'" for item in lista]
             df['Valor Total'] = listalimpa
 
+        case 'DIVIDAS':
+            texto = extrair_texto_pdf_plumber(caminho)
+            for pagina in texto:
+
+                # Extrair a data limite a partir do campo "Data"
+                data_limite = extrair_data_limite(pagina)
+                print(f"Data limite encontrada: {data_limite}")
+
+                quadro1 = extrair_conteudo_entre_quadros(
+                    pagina,
+                    inicio_quadro="QUADRO I - DÉBITOS INSCRITOS EM DÍVIDA ATIVA",
+                    fim_quadro="QUADRO II - COTAS VENCIDAS NÃO INSCRITAS EM DÍVIDA ATIVA / COTAS A VENCER",
+                    # Lista de padrões para remoção
+                    linhascabecalhos=[
+                        r"^\*+$",  # Linhas contendo apenas asteriscos
+                        r"^Ano/Lote/.*?\n.*?\n",  # Remove todas as linhas de cabeçalho (múltiplas linhas)
+                        r"^Total a pagar:.*\n",  # Remove linhas que começam com 'Total a pagar:'
+                        r"^\*[\s\*]+(?=Total a pagar:)",  # Remove apenas os asteriscos antes de 'Total a pagar'
+                        r"^\*[\s\*]*$"  # Remove linhas com apenas asteriscos
+                    ]
+                )
+                if quadro1:
+                    if len(quadro1)>0:
+                        return {
+                            "Arquivo": caminho.split('/')[-1],
+                            "Possui_Divida": True
+                        }
+                else:
+                    quadro1 = extrair_conteudo_entre_quadros(
+                        pagina,
+                        inicio_quadro="QUADRO I - NÃO HÁ DÉBITOS INSCRITOS EM DÍVIDA ATIVA",
+                        fim_quadro="QUADRO II - COTAS VENCIDAS NÃO INSCRITAS EM DÍVIDA ATIVA / COTAS A VENCER",
+                        # Lista de padrões para remoção
+                        linhascabecalhos=[
+                            r"^\*+$",  # Linhas contendo apenas asteriscos
+                            r"^Ano/Lote/.*?\n.*?\n",  # Remove todas as linhas de cabeçalho (múltiplas linhas)
+                            r"^Total a pagar:.*\n",  # Remove linhas que começam com 'Total a pagar:'
+                            r"^\*[\s\*]+(?=Total a pagar:)",  # Remove apenas os asteriscos antes de 'Total a pagar'
+                            r"^\*[\s\*]*$"  # Remove linhas com apenas asteriscos
+                        ]
+                    )
+                    if quadro1:
+                        if len(quadro1) > 0:
+                            return {
+                                "Arquivo": caminho.split('/')[-1],
+                                "Possui_Divida": True
+                            }
+
+                # Extrair todos os QUADRO II
+                # Extraindo os quadros lado a lado
+                quadros2 = extrair_conteudo_entre_quadros(
+                    pagina,
+                    inicio_quadro="QUADRO II - COTAS VENCIDAS NÃO INSCRITAS EM DÍVIDA ATIVA / COTAS A VENCER",
+                    fim_quadro="QUADRO III - INFORMAÇÕES COMPLEMENTARES",
+                    linhascabecalhos=[r"^ANO DO CARNÊ.*?\n.*?\n",
+                                      r"^NORMAL/.*?\n.*?\n",
+                                      r"^EM ABERTO.*?\n.*?\n",
+                                      r"^Valor Valor Valor.*?\n.*?\n",
+                                      r"^Cota Vencimento.*?\n.*?\n",
+                                      r"^das Parcelas.*?\n.*?\n",
+                                      r"^Total Lançado.*?\n.*?",
+                                      r'\*+\s*']
+                )
+
+                if data_limite and quadros2:
+                    datasvencidas = extrair_datas_menores(pagina, data_limite)
+                    if len(datasvencidas) > 0:
+                        return {
+                            "Arquivo": caminho.split('/')[-1],
+                            "Possui_Divida": True
+                        }
+
+                return {
+                    "Arquivo": caminho.split('/')[-1],
+                    "Possui_Divida": False
+                }
     return df
 
 
 def hora(timezone, pedaco=''):
     import datetime
 
-    url = 'http://worldtimeapi.org/api/timezone/' + timezone
-    resposta = requests.get(url)
+
     try:
+        url = 'http://worldtimeapi.org/api/timezone/' + timezone
+        resposta = requests.get(url)
         match pedaco.upper():
             case 'DATA':
                 return datetime.datetime.fromisoformat(resposta.json()['datetime']).date()
@@ -794,13 +896,13 @@ def hora(timezone, pedaco=''):
         print(str(e))
         match pedaco.upper():
             case 'DATA':
-                return datetime.datetime.fromisoformat(resposta.json()['datetime']).date()
+                return datetime.datetime.now().date()
 
             case 'HORA':
-                return datetime.datetime.fromisoformat(resposta.json()['datetime']).time()
+                return datetime.datetime.now().time()
 
             case _:
-                return datetime.datetime.fromisoformat(resposta.json()['datetime'])
+                return datetime.datetime.now()
 
 
 def timezones_disponiveis():
@@ -814,6 +916,7 @@ def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, centralizado=False
     import fitz
 
     tempoespera = 0
+
     # Abre o arquivo PDF que quer adicionar o cabeçalho
     if os.path.isfile(arquivo):
         with fitz.open(arquivo) as pdf:
@@ -854,12 +957,6 @@ def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, centralizado=False
             # Salvo o arquivo com o cabeçalho
             pdf.save(arquivodestino)
 
-        # while not (os.path.isfile(arquivodestino) or tempoespera <= 30):
-        #     time.sleep(1)
-        #     tempoespera += 1
-        #
-        # tempoespera = 0
-
         # Verifica se o arquivo foi salvo
         if os.path.isfile(arquivodestino):
             # Apaga o arquivo original
@@ -898,7 +995,7 @@ def removersenhapdf(arquivobloqueado):
 
 
 def encontrar_administradora(administradora, campo='Administradora'):
-    lista = senha.listamultiplas
+    lista = carregar_lista_multiplas()
     for dicionario in lista:
         if dicionario[campo] == administradora:
             return dicionario
@@ -957,29 +1054,48 @@ def mover_arquivo(origem, destino):
 
 
 def retornastrinflistaadm(campo):
-    nomes_administradoras = [admin[campo] for admin in senha.listaadministradora]
+    listaadministradora = carregar_lista_administradoras()
+    nomes_administradoras = [admin[campo] for admin in listaadministradora]
     string_nomes_administradoras = ', '.join(["'{}'".format(item) for item in nomes_administradoras])
     return string_nomes_administradoras
 
 
-def retornarlistaboletos(listaadministradora=None):
-    if 'WHERE' not in senha.sqlcondominios:
-        if listaadministradora is not None:
-            string_nomes_administradoras = ', '.join(["'{}'".format(item) for item in listaadministradora])
+def retornarlistaboletos(listaadministradora=None, anomes=''):
+    """
+    Gera o SQL para obter boletos com base na lista de administradoras.
 
-            sql = (senha.sqlcondominios + ' WHERE NomeAdm in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
+    :param listaadministradora: Lista opcional de administradoras. Se None, usa todas do .env.
+    :return: SQL gerado como string.
+    """
+    if 'WHERE' not in senha.SQLCONDOMINIOS:
+        if listaadministradora is not None:
+            # Usar a lista fornecida
+            string_nomes_administradoras = ', '.join(["'{}'".format(item) for item in listaadministradora])
+            sql = (senha.SQLCONDOMINIOS + ' WHERE TRIM(Tabela.NomeAdm) in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
         else:
-            sql = (senha.sqlcondominios + ' WHERE NomeAdm in (%s) ORDER BY Codigo;' % retornastrinflistaadm('nomereal'))
+            # Carregar do .env se nenhuma lista for fornecida
+            string_nomes_administradoras = ', '.join(
+                ["'{}'".format(item['nomereal']) for item in carregar_lista_administradoras()]
+            )
+            sql = (senha.SQLCONDOMINIOS + ' WHERE TRIM(Tabela.NomeAdm) in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
     else:
         if listaadministradora is not None:
-
+            # Usar a lista fornecida
             string_nomes_administradoras = ', '.join(["'{}'".format(item) for item in listaadministradora])
-
-            sql = (senha.sqlcondominios + ' AND NomeAdm in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
+            sql = (senha.SQLCONDOMINIOS + ' AND TRIM(Tabela.NomeAdm) in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
         else:
-            # string_nomes_administradoras = "'ABRJ ADMINISTRADORA DE BENS'"
-            sql = (senha.sqlcondominios + ' AND NomeAdm in (%s) ORDER BY Codigo;' % retornastrinflistaadm('nomereal'))
-            # sql = (senha.sqlcondominios + ' AND NomeAdm in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
+            # Carregar do .env se nenhuma lista for fornecida
+            string_nomes_administradoras = ', '.join(
+                ["'{}'".format(item['nomereal']) for item in carregar_lista_administradoras()]
+            )
+            sql = (senha.SQLCONDOMINIOS + ' AND TRIM(Tabela.NomeAdm) in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
+
+    if len(anomes) > 0:
+        sql = sql.replace(
+            " FROM BoletosCondominios",
+            f" FROM BoletosCondominios WHERE Format(Vencimento,'mm/yyyy') = '{anomes}'"
+        )
+
     return sql
 
 
@@ -987,10 +1103,10 @@ def enviarSMS(mensagem):
     from twilio.rest import Client
 
     try:
-        client = Client(senha.account_sid, senha.auth_token)
+        client = Client(os.getenv('ACCOUNT_SID'), os.getenv('AUTH_TOKEN'))
         message = client.messages.create(
-            to=senha.my_number,
-            from_=senha.twilio_number,
+            to=os.getenv('MY_NUMBER'),
+            from_=os.getenv('TWILIO_NUMBER'),
             body=mensagem
         )
 
@@ -1086,3 +1202,234 @@ def allow_sleep():
     ctypes.windll.kernel32.SetThreadExecutionState(
         ES_CONTINUOUS
     )
+
+def is_valid_file_in_path(file_name, path):
+    for root, _, files in os.walk(path):
+        if file_name in files:
+            return os.path.join(root, file_name)
+    return None
+
+
+def extrair_conteudo_entre_quadros(texto, inicio_quadro, fim_quadro, linhascabecalhos=[]):
+    """
+    Extrai o conteúdo entre dois quadros de texto, excluindo o cabeçalho do quadro inicial.
+
+    Parâmetros:
+    - texto: O texto completo do documento.
+    - inicio_quadro: O texto inicial para identificar o começo do conteúdo.
+    - fim_quadro: O texto final para identificar o fim do conteúdo.
+    - linhascabecalhos: Lista de padrões regex para identificar linhas de cabeçalho que devem ser removidas.
+
+    Retorna:
+    - String com o conteúdo extraído entre os quadros, sem os cabeçalhos e respeitando os delimitadores.
+    """
+    # Ajustar os delimitadores para lidar com variações no texto
+    inicio_quadro = re.escape(inicio_quadro)
+    fim_quadro = re.escape(fim_quadro)
+
+    # Regex para capturar o texto entre os delimitadores ou até encontrar uma linha de asteriscos
+    match = re.search(
+        rf"{inicio_quadro}(.*?)(?:{fim_quadro}|^\*+$)",
+        texto,
+        re.DOTALL | re.MULTILINE | re.IGNORECASE
+    )
+
+    if match:
+        conteudo = match.group(1)
+
+        # Remover linhas contendo apenas asteriscos
+        conteudo = re.sub(r"^\*[\s\*]*$", "", conteudo, flags=re.MULTILINE)
+
+        # Aplicar remoção dos cabeçalhos especificados
+        if linhascabecalhos:
+            for cabecalho in linhascabecalhos:
+                conteudo = re.sub(cabecalho, "", conteudo, flags=re.MULTILINE | re.DOTALL)
+
+        # Retornar o texto limpo
+        return conteudo.strip()
+
+    return None
+
+def extrair_data_limite(texto):
+    """
+    Extrai a data limite do campo 'Data' baseado no padrão 'Contribuinte Data Folha'.
+
+    Parâmetros:
+    - texto: Texto completo do documento.
+
+    Retorna:
+    - String com a data limite encontrada ou None caso não encontre.
+    """
+    # Regex busca a linha contendo 'Data' e captura a data no formato dd/mm/yyyy
+    match = re.search(r"Contribuinte\s+Data\s+Folha.*?\n.*?\s(\d{2}/\d{2}/\d{4})", texto)
+    return match.group(1) if match else None
+
+def extrair_datas_anteriores(quadro_texto, data_limite):
+    """
+    Extrai datas anteriores à data limite especificada.
+
+    Parâmetros:
+    - quadro_texto: Texto limpo do quadro.
+    - data_limite: Data limite no formato dd/mm/yyyy.
+
+    Retorna:
+    - Lista de datas anteriores.
+    """
+    datas = re.findall(r'(\d{2}/\d{2}/\d{4})', quadro_texto)
+    datas_anteriores = [data for data in datas if data < data_limite]
+    return datas_anteriores
+
+def extrair_quadros_lado_a_lado(texto, inicio_quadro, fim_quadro):
+    """
+    Extrai e separa quadros lado a lado como tabelas distintas.
+
+    Parâmetros:
+    - texto: Texto completo do documento.
+    - inicio_quadro: Marcador inicial do quadro.
+    - fim_quadro: Marcador final do quadro.
+
+    Retorna:
+    - Uma lista com os quadros separados como strings.
+    """
+    # Extrai o conteúdo entre os quadros
+    match = re.search(
+        rf"{inicio_quadro}(.*?){fim_quadro}",
+        texto, re.DOTALL
+    )
+
+    if match:
+        conteudo = match.group(1)
+
+        # Divide o conteúdo em tabelas lado a lado com base nas quebras de linhas duplas
+        tabelas = re.split(r"\n{2,}", conteudo)
+
+        # Remove linhas com apenas '*' ou espaços em branco
+        tabelas_limpa = [
+            re.sub(r"^\*+$", "", tabela.strip(), flags=re.MULTILINE)
+            for tabela in tabelas if tabela.strip()
+        ]
+        return tabelas_limpa
+    return None
+
+def extrair_texto_pdf_plumber(caminho):
+    texto = []
+    with pdfplumber.open(caminho) as pdf:
+        for pagina in pdf.pages:
+            texto.append(pagina.extract_text())
+    return texto
+
+
+def extrair_datas_menores(texto, data_referencia):
+    """
+    Extrai todas as datas no formato dd/mm/aaaa menores que uma data de referência.
+
+    Parâmetros:
+    - texto: String contendo o texto a ser analisado.
+    - data_referencia: String no formato dd/mm/aaaa para comparação.
+
+    Retorna:
+    - Lista de strings com as datas menores que a referência.
+    """
+    # Converter a data de referência em datetime
+    data_ref = datetime.strptime(data_referencia, "%d/%m/%Y")
+
+    # Encontrar todas as datas no formato dd/mm/aaaa
+    padrao_data = r"\b\d{2}/\d{2}/\d{4}\b"
+    datas_encontradas = re.findall(padrao_data, texto)
+
+    # Filtrar datas menores que a referência
+    datas_menores = [
+        data for data in datas_encontradas
+        if datetime.strptime(data, "%d/%m/%Y") < data_ref
+    ]
+
+    return datas_menores
+
+
+def carregar_lista_administradoras():
+    """
+    Carrega a lista de administradoras do .env.
+    """
+    lista_administradora_str = os.getenv("LISTAADMINISTRADORA")
+    if not lista_administradora_str:
+        raise ValueError("LISTAADMINISTRADORA não está definida no .env ou está vazia.")
+
+    try:
+        return json.loads(lista_administradora_str)
+    except json.JSONDecodeError:
+        raise ValueError("O conteúdo de LISTAADMINISTRADORA no .env não está em formato JSON válido.")
+
+
+def carregar_lista_multiplas():
+    """
+    Carrega a LISTAMULTIPLAS do .env como uma lista de dicionários.
+    """
+    lista_multiplas_str = os.getenv("LISTAMULTIPLAS")
+    if not lista_multiplas_str:
+        raise ValueError("A variável LISTAMULTIPLAS não está definida no .env ou está vazia.")
+
+    try:
+        return json.loads(lista_multiplas_str)
+    except json.JSONDecodeError:
+        raise ValueError("O conteúdo de LISTAMULTIPLAS no .env não está em formato JSON válido.")
+
+def normalize_text(text):
+    """Remove caracteres não alfanuméricos e converte para minúsculas."""
+
+    text = re.sub(r'\W+', ' ', text).strip().lower()
+
+    # Substituir espaços consecutivos por um único espaço:
+    text = re.sub(r'\s+', ' ', text)
+
+    # Substituir padrões do tipo "- <um ou mais espaços> -" por apenas um hífen:
+    text = re.sub(r'-\s+-', '-', text)
+
+    return text
+
+def busca_fuzzy(lista_textos, texto_buscado, corte=70):
+    """
+    Realiza uma busca fuzzy em uma lista de textos e retorna o índice do item
+    com a maior correspondência que atinge ou supera o corte definido.
+
+    Se nenhum item atingir o corte, a função imprime o item com a maior correspondência
+    e a respectiva porcentagem, retornando None.
+
+    Parâmetros:
+    - lista_textos: Lista de strings a ser pesquisada.
+    - texto_buscado: Texto que desejamos encontrar.
+    - corte: Percentual de similaridade mínimo para considerar uma correspondência (default 70).
+
+    Retorna:
+    - Índice do item com a maior correspondência que atinge o corte.
+    - None, se nenhum item atingir o corte.
+    """
+    max_index = None
+    max_ratio = 0
+
+    # Normaliza o texto buscado para facilitar a comparação
+    normalized_search = normalize_text(texto_buscado)
+
+    for indice, texto in enumerate(lista_textos):
+        # Normaliza o texto candidato
+        normalized_texto = normalize_text(texto)
+        # Se o final do texto candidato normalizado for exatamente igual ao texto buscado
+        if normalized_texto.endswith(normalized_search):
+            similaridade = fuzz.ratio(texto.lower(), texto_buscado.lower())
+            if corte > similaridade:
+                similaridade = corte
+
+        else:
+            similaridade = fuzz.ratio(texto.lower(), texto_buscado.lower())
+
+        if similaridade > max_ratio:
+            max_ratio = similaridade
+            max_index = indice
+
+    if max_ratio >= corte:
+        print(f"Melhor correspondência do item {texto_buscado}: '{lista_textos[max_index]}' com {max_ratio}%")
+        return max_index
+    else:
+        print(f"Nenhuma correspondência atinge o corte de {corte}%.")
+        if max_index is not None:
+            print(f"Melhor correspondência do item {texto_buscado}: '{lista_textos[max_index]}' com {max_ratio}%")
+        return None
