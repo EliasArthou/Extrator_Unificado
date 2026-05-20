@@ -121,10 +121,15 @@ class _WorkerConsole:
         else:
             self._base.print(*args, **kwargs)
 
-    def flush(self, header: str = ""):
-        """Escreve buffer acumulado no console, de forma sequencial."""
+    def flush(self, header: str = "", footer: str = ""):
+        """Escreve buffer acumulado no console, de forma sequencial.
+
+        header: linha(s) impressas antes do buffer (ex: separador + cliente).
+        footer: linha(s) impressas depois do buffer (ex: status final OK/SKIP/ERRO).
+        Tudo dentro do mesmo lock para evitar interleaving entre workers.
+        """
         buf = self._buffer()
-        if not buf and not header:
+        if not buf and not header and not footer:
             return
         wid = threading.current_thread().name.split("-")[-1]
         with self._write_lock:
@@ -134,6 +139,8 @@ class _WorkerConsole:
                 if args:
                     args = (f"[dim]\\[W{wid}][/] {args[0]}",) + args[1:]
                 self._base.print(*args, **kwargs)
+            if footer:
+                self._base.print(footer)
         buf.clear()
 
     def __getattr__(self, name):
@@ -172,21 +179,29 @@ def _worker(worker_id: int, work_queue: queue.Queue, objeto,
                 cod = str(linha[Bh.Codigo])
                 nriptu = str(linha[Bh.NrIPTU]).strip()
 
-                header = (
-                    f"\n[bold]{'='*60}[/]\n"
-                    f"[bold cyan][W{worker_id}][/] [{i+1}/{total}] Cliente: {cod} | IPTU: {nriptu}"
-                    f"\n[bold]{'='*60}[/]"
-                )
+                def _montar_header(n_processado: int) -> str:
+                    return (
+                        f"\n[bold]{'='*60}[/]\n"
+                        f"[bold cyan][W{worker_id}][/] [{n_processado}/{total}] "
+                        f"Cliente: {cod} | IPTU: {nriptu}"
+                        f"\n[bold]{'='*60}[/]"
+                    )
 
                 # Skip se arquivo já existe
                 caminho_existente = os.path.join(objeto.pastadownload, f"{cod}_{nriptu}.pdf")
                 if os.path.isfile(caminho_existente):
                     status = 'SKIP (arquivo existente)'
-                    worker_console.flush(header=header)
+                    # Atômico: incrementa contador, monta header, faz flush — mesmo lock
+                    # pra garantir que a numeração apareça em ordem cronológica de término.
                     with lock:
+                        counters['processed'] += 1
                         counters['skip'] += 1
                         log_resultados.append({'Cod Cliente': cod, 'IPTU': nriptu, 'Status': status})
                         progress.advance(task_id)
+                        worker_console.flush(
+                            header=_montar_header(counters['processed']),
+                            footer=f"  [yellow]-> SKIP[/] {status}",
+                        )
                     work_queue.task_done()
                     continue
 
@@ -199,14 +214,25 @@ def _worker(worker_id: int, work_queue: queue.Queue, objeto,
                 except Exception as e:
                     status = f"ERRO: {e}"
 
-                # Flush agrupado por cliente
-                worker_console.flush(header=header)
+                # Define linha de status (footer) p/ feedback em tempo real
+                if 'Ok' in status or 'OK' in status:
+                    status_footer = f"  [green]-> OK[/]"
+                elif 'SKIP' in status or 'Já extraído' in status:
+                    status_footer = f"  [yellow]-> SKIP[/] {status}"
+                elif 'PAGO' in status or 'Quitad' in status:
+                    status_footer = f"  [cyan]-> PAGO[/] {status}"
+                else:
+                    status_footer = f"  [red]-> ERRO[/] {str(status)[:160]}"
 
+                # Atômico: incrementa processed + contadores, faz flush — tudo sob mesmo lock
                 with lock:
+                    counters['processed'] += 1
                     if 'Ok' in status or 'OK' in status:
                         counters['ok'] += 1
                     elif 'SKIP' in status or 'Já extraído' in status:
                         counters['skip'] += 1
+                    elif 'PAGO' in status or 'Quitad' in status:
+                        counters['pago'] = counters.get('pago', 0) + 1
                     else:
                         counters['erros'] += 1
 
@@ -215,6 +241,11 @@ def _worker(worker_id: int, work_queue: queue.Queue, objeto,
                         'IPTU': nriptu,
                         'Status': status,
                     })
+
+                    worker_console.flush(
+                        header=_montar_header(counters['processed']),
+                        footer=status_footer,
+                    )
 
                     progress.advance(task_id)
 
@@ -330,7 +361,7 @@ def main():
     aux.prevent_sleep()
     tempo_inicio = time.time()
     log_resultados = []
-    counters = {'ok': 0, 'skip': 0, 'erros': 0}
+    counters = {'ok': 0, 'skip': 0, 'pago': 0, 'erros': 0, 'processed': 0}
     lock = threading.Lock()
 
     # Fila de trabalho
@@ -430,6 +461,8 @@ def main():
                             counters['ok'] += 1
                         elif 'SKIP' in status or 'Já extraído' in status:
                             counters['skip'] += 1
+                        elif 'PAGO' in status or 'Quitad' in status:
+                            counters['pago'] += 1
                         else:
                             counters['erros'] += 1
 
@@ -523,6 +556,7 @@ def main():
 
         console.print(f"\n[green][LOG][/] Resultado salvo em: {caminho_log}")
 
+
     # ── 6. Resumo ─────────────────────────────────────────────
     console.print(f"\n[bold]{'='*60}[/]")
     console.print(f"[bold green]RESUMO[/]")
@@ -532,6 +566,7 @@ def main():
     console.print(f"  Tipo pagamento:    {args.tipo}")
     console.print(f"  [green]OK:                {counters['ok']}[/]")
     console.print(f"  [cyan]Skip (existente):  {counters['skip']}[/]")
+    console.print(f"  [cyan]Pago (quitado):    {counters.get('pago', 0)}[/]")
     console.print(f"  [red]Erros:             {counters['erros']}[/]")
     console.print(f"  Tempo total:       {tempo_fmt}")
     console.print(f"  Pasta:             {os.path.abspath(args.pasta)}")
@@ -540,7 +575,8 @@ def main():
         console.print(f"\n[bold red]Registros com erro:[/]")
         for reg in log_resultados:
             v = reg['Status']
-            if 'Ok' not in v and 'OK' not in v and 'SKIP' not in v:
+            if ('Ok' not in v and 'OK' not in v and 'SKIP' not in v
+                    and 'PAGO' not in v and 'Quitad' not in v):
                 console.print(f"  {reg['Cod Cliente']} | {reg['IPTU']} | {v}")
 
 

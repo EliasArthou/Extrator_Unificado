@@ -27,10 +27,26 @@ import urllib3
 load_dotenv()
 
 # Suprime warnings de conexão do requests/urllib3 (ex: ConnectionResetError ao reusar sessão)
-logging.getLogger("urllib3").setLevel(logging.ERROR)
+logging.getLogger("urllib3").setLevel(logging.CRITICAL)
+logging.getLogger("urllib3.util.retry").setLevel(logging.CRITICAL)
+logging.getLogger("requests").setLevel(logging.CRITICAL)
 urllib3.disable_warnings()
+import warnings
+warnings.filterwarnings('ignore', module='urllib3')
+warnings.filterwarnings('ignore', message='.*Connection.*')
 
 console = Console(force_terminal=True, color_system="truecolor")
+
+import threading
+_print_lock = threading.Lock()
+
+
+def _flush_log(log: list[str]):
+    """Imprime todas as mensagens acumuladas no backlog de uma vez (thread-safe)."""
+    with _print_lock:
+        for msg in log:
+            console.print(msg)
+    log.clear()
 
 Codigo, NrIPTU = 0, 1
 NrCBM = 1    # coluna CBM na query SQLCBM (Codigo=0, CBM=1, IPTU=2, Cidade=3)
@@ -62,13 +78,16 @@ def _navegar_ate_dados(page: Page, nriptu: str) -> tuple[bool, str]:
                 page.get_by_role("link", name="clique aqui").click()
                 page.wait_for_load_state("networkidle")
 
-            if os.getenv('SITEIPTU') not in page.url:
+            # Sempre navega de volta se o input não está visível
+            # (a URL é a mesma para tela inicial e tela de dados)
+            input_insc = page.locator("#ctl00_ePortalContent_inscricao_input")
+            if not input_insc.is_visible(timeout=2000):
                 page.goto(os.getenv('SITEIPTU'), wait_until="networkidle", timeout=60000)
 
             page.wait_for_load_state("networkidle")
 
             input_insc = page.locator("#ctl00_ePortalContent_inscricao_input")
-            input_insc.wait_for(state="visible")
+            input_insc.wait_for(state="visible", timeout=15000)
             input_insc.fill(nriptu)
 
             try:
@@ -81,7 +100,7 @@ def _navegar_ate_dados(page: Page, nriptu: str) -> tuple[bool, str]:
             if msg.is_visible(timeout=2000):
                 txt = msg.inner_text().strip()
                 if ERRO_SESSAO in txt:
-                    page.goto(os.getenv('SITEIPTU'))
+                    page.goto(os.getenv('SITEIPTU'), wait_until="networkidle", timeout=30000)
                     continue
                 return False, txt
 
@@ -95,7 +114,7 @@ def _navegar_ate_dados(page: Page, nriptu: str) -> tuple[bool, str]:
             if tentativa == 2:
                 return False, f"Erro Playwright: {str(e)}"
             try:
-                page.goto(os.getenv('SITEIPTU'))
+                page.goto(os.getenv('SITEIPTU'), wait_until="networkidle", timeout=30000)
             except:
                 pass
 
@@ -121,9 +140,16 @@ def _gerar_boleto_interceptado(page: Page, tipo_pag: str, nrguia: int = 0) -> tu
     Retorna: (pdf_base64, mensagem_erro)
     """
     try:
-        # 1. Marca o checkbox da data
+        # 1. Marca o checkbox da data via .click() nativo do DOM.
+        # Por que não usar Playwright .check(): o site renderiza o checkbox
+        # invisível (0x0) e o Playwright recusa clicar nele mesmo com force=True.
+        # Por que .click() em vez de dispatchEvent('change'): cbCotaUnica usa
+        # onchange (SelecionarDarmUnico), mas Chk_001/002/003 usam onclick
+        # (SelecionaLimpa). O .click() nativo dispara ambos os handlers.
         sel_id = "[id*='cbCotaUnica']" if tipo_pag == '1' else f"[id*='Chk_00{int(tipo_pag) - 1}']"
-        page.locator(sel_id).check()
+        loc = page.locator(sel_id)
+        loc.wait_for(state='attached', timeout=10000)
+        loc.evaluate("el => el.click()")
 
         # 2. Intercepta a resposta do POST de gerar boleto
         resposta_html = None
@@ -140,7 +166,11 @@ def _gerar_boleto_interceptado(page: Page, tipo_pag: str, nrguia: int = 0) -> tu
 
         try:
             # 3. Clica em GERAR BOLETO
-            page.locator("#ctl00_ePortalContent_btnDarmIndiv").click()
+            # wait_for_timeout: dá tempo pro JS do site processar o checkbox
+            # (SelecionarDarmUnico) e habilitar o botão. force=True pula o check
+            # de visibilidade — mesmo motivo do dispatchEvent no checkbox.
+            page.wait_for_timeout(300)
+            page.locator("#ctl00_ePortalContent_btnDarmIndiv").click(force=True)
 
             # Espera o popup de confirmação e clica "Sim"/"Ok"
             popup_ok = page.locator("#popup_ok")
@@ -182,6 +212,17 @@ def _gerar_boleto_interceptado(page: Page, tipo_pag: str, nrguia: int = 0) -> tu
 # FUNÇÃO PRINCIPAL (substitui extrairIPTU_pw)
 # ─────────────────────────────────────────────
 
+def _reset_pagina_iptu(page: Page):
+    """Volta para a tela inicial do IPTU (campo de inscrição)."""
+    try:
+        page.goto(os.getenv('SITEIPTU'), wait_until="networkidle", timeout=15000)
+    except Exception:
+        try:
+            page.goto(os.getenv('SITEIPTU'))
+        except Exception:
+            pass
+
+
 def extrairIPTU_hibrido(page: Page, objeto, linha, nrguia=0):
     """
     Extração híbrida: Playwright navega + intercepta PDF.
@@ -212,6 +253,7 @@ def extrairIPTU_hibrido(page: Page, objeto, linha, nrguia=0):
             # ── Playwright: inscrição + reCAPTCHA ──
             sucesso, erro = _navegar_ate_dados(page, nriptu)
             if not sucesso:
+                _reset_pagina_iptu(page)
                 return [cod, nriptu, '', '', '', '', '', erro], None
 
             # ── Extrai dados da tela (contribuinte, endereço, exercício) ──
@@ -222,6 +264,35 @@ def extrairIPTU_hibrido(page: Page, objeto, linha, nrguia=0):
             # ── Clica na guia ──
             guias = page.locator('[title*="visualizar / imprimir"]')
             if guias.count() == 0:
+                # Antes de chamar de "Verificar Manualmente", checa se o IPTU está pago.
+                # O site preenche o input #ctl00_ePortalContent_MENSAGEM com "Quitada..."
+                # quando não há boleto a emitir porque o imóvel já quitou o exercício.
+                mensagem = ""
+                try:
+                    mensagem = page.locator(
+                        "#ctl00_ePortalContent_MENSAGEM"
+                    ).input_value(timeout=1000) or ""
+                except Exception:
+                    pass
+
+                if "quitad" in mensagem.lower():
+                    _reset_pagina_iptu(page)
+                    return [cod, nriptu, exercicio, '', '', contribuinte, endereco,
+                            'PAGO (Quitada)'], None
+
+                # Caso não seja "Quitada": dump de debug + retorna "Verificar Manualmente"
+                try:
+                    pasta_debug = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                               "Logs", "debug_sem_guia")
+                    os.makedirs(pasta_debug, exist_ok=True)
+                    ts = datetime.now().strftime("%H%M%S")
+                    base = os.path.join(pasta_debug, f"{cod}_{nriptu}_{ts}")
+                    page.screenshot(path=f"{base}.png", full_page=True)
+                    with open(f"{base}.html", "w", encoding="utf-8") as f:
+                        f.write(page.content())
+                except Exception:
+                    pass  # debug não pode quebrar fluxo
+                _reset_pagina_iptu(page)
                 return [cod, nriptu, '', '', '', '', '', 'Verificar (Extrair Manualmente)'], None
 
             guias.nth(nrguia).click()
@@ -259,8 +330,8 @@ def extrairIPTU_hibrido(page: Page, objeto, linha, nrguia=0):
                         f.write(base64.b64decode(pdf_b64))
 
                     try:
-                        aux.adicionarcabecalhopdf(caminhodestino, caminhodestino,
-                                                  cod, codigobarras=False)
+                        aux.adicionarcabecalhopdf_topo_adaptativo(
+                            caminhodestino, caminhodestino, cod)
                     except Exception:
                         pass
                 else:
@@ -287,18 +358,12 @@ def extrairIPTU_hibrido(page: Page, objeto, linha, nrguia=0):
                 df.insert(loc=5, column='Arquivo', value=listaarquivo)
 
         # ── RESET: volta para TelaSelecao ──
-        try:
-            page.goto(os.getenv('SITEIPTU'), wait_until="networkidle", timeout=15000)
-        except:
-            pass
+        _reset_pagina_iptu(page)
 
         return dadosiptu, df
 
     except Exception as e:
-        try:
-            page.goto(os.getenv('SITEIPTU'))
-        except:
-            pass
+        _reset_pagina_iptu(page)
         return [cod, nriptu, '', '', '', '', '', f"Erro: {str(e)}"], None
 
 
@@ -309,6 +374,7 @@ def extrairIPTU_hibrido(page: Page, objeto, linha, nrguia=0):
 def _navegar_nadaconsta(page: Page, nriptu: str) -> tuple[bool, str, str]:
     """
     Playwright: preenche inscrição + PROSSEGUIR no portal Nada Consta.
+    O portal usa AJAX (sem navegação de página) — aguarda #PDF ou #MSG.
     Retorna: (sucesso, mensagem_erro, ano_exercicio)
     """
     url_nc = os.getenv('SITENADACONSTA')
@@ -335,18 +401,46 @@ def _navegar_nadaconsta(page: Page, nriptu: str) -> tuple[bool, str, str]:
             except:
                 pass
 
-            # Clica PROSSEGUIR (tem reCAPTCHA v3)
+            # Garante que #PDF e #MSG estão ocultos antes de clicar
+            # (reset visual de requisição anterior na mesma sessão)
+            page.evaluate("""
+                document.getElementById('PDF') && (document.getElementById('PDF').innerHTML = '');
+                document.getElementById('MSG') && document.getElementById('MSG').classList.add('hidden');
+            """)
+
+            # Aguarda reCAPTCHA v3 carregar antes de clicar
             try:
-                with page.expect_navigation(wait_until="networkidle", timeout=30000):
-                    page.locator("#Avancar").click()
+                page.wait_for_function(
+                    "() => typeof grecaptcha !== 'undefined' && typeof grecaptcha.execute === 'function'",
+                    timeout=10000
+                )
+            except:
+                pass  # Continua mesmo que não detecte — pode funcionar sem
+
+            # Clica PROSSEGUIR — portal usa reCAPTCHA v3 + AJAX, sem navegação
+            page.locator("#Avancar").click()
+
+            # Aguarda o AJAX terminar: #PDF visível (sucesso) ou #MSG visível (erro)
+            # O JS injeta a resposta em #PDF quando tem <object>, ou mostra #MSG
+            try:
+                page.wait_for_function(
+                    """() => {
+                        const pdf = document.getElementById('PDF');
+                        const msg = document.getElementById('MSG');
+                        const pdfOk = pdf && !pdf.classList.contains('hidden') && pdf.innerHTML.trim() !== '';
+                        const msgOk = msg && !msg.classList.contains('hidden');
+                        return pdfOk || msgOk;
+                    }""",
+                    timeout=30000
+                )
             except:
                 pass
 
-            # Verifica erro
-            msg = page.locator("#ctl00_ePortalContent_MSG")
+            # Verifica se é erro
+            msg_el = page.locator("#MSG")
             try:
-                if msg.is_visible(timeout=2000):
-                    txt = msg.inner_text().strip()
+                if msg_el.is_visible(timeout=1000):
+                    txt = page.locator("#MSGText").inner_text(timeout=1000).strip()
                     if txt:
                         return False, txt, anoextracao
             except:
@@ -396,23 +490,60 @@ def extrairnadaconsta_hibrido(page: Page, objeto, linha, dataatual=''):
             if not sucesso:
                 dadosiptu = [cod, nriptu, anoextracao, erro]
             else:
-                # ── Intercepta PDF da resposta ──
-                html_conteudo = page.content()
-                pdf_b64 = _extrair_pdf_base64(html_conteudo)
+                # ── AJAX injetou a resposta em #PDF — agora o content() tem o HTML ──
+                os.makedirs(os.path.dirname(caminhodestino) or ".", exist_ok=True)
+
+                # 1ª tentativa: base64 no HTML do #PDF (caminho principal)
+                html_pdf_div = page.locator("#PDF").inner_html(timeout=5000)
+                pdf_b64 = _extrair_pdf_base64(html_pdf_div)
 
                 if pdf_b64:
-                    # Pode haver múltiplos PDFs (links "aqui")
-                    os.makedirs(os.path.dirname(caminhodestino) or ".", exist_ok=True)
                     with open(caminhodestino, "wb") as f:
                         f.write(base64.b64decode(pdf_b64))
+                else:
+                    # 2ª tentativa: lê href do link "aqui" diretamente do atributo
+                    links_aqui = page.locator("#PDF a")
+                    qtd_links = links_aqui.count()
 
+                    if qtd_links == 0:
+                        dadosiptu = [cod, nriptu, anoextracao, 'Verificar (Extrair Manualmente)']
+                    else:
+                        for i in range(qtd_links):
+                            nome_arquivo = (f"{cod}_{nriptu}.pdf" if i == 0
+                                            else f"{cod}_{nriptu}_{i}.pdf")
+                            destino_i = os.path.join(objeto.pastadownload, nome_arquivo)
+
+                            try:
+                                href = links_aqui.nth(i).get_attribute("href") or ""
+
+                                if href.startswith("data:application/pdf;base64,"):
+                                    b64 = href.split(",", 1)[1].strip()
+                                    with open(destino_i, "wb") as f:
+                                        f.write(base64.b64decode(b64))
+                                elif href.startswith("http"):
+                                    import requests as _req
+                                    resp = _req.get(href, timeout=60)
+                                    resp.raise_for_status()
+                                    with open(destino_i, "wb") as f:
+                                        f.write(resp.content)
+                                else:
+                                    with page.expect_download(timeout=60000) as dl_info:
+                                        links_aqui.nth(i).click()
+                                    dl_info.value.save_as(destino_i)
+
+                                if i == 0:
+                                    caminhodestino = destino_i
+
+                            except Exception as e:
+                                dadosiptu = [cod, nriptu, anoextracao, f'Erro download: {e}']
+                                break
+
+                if os.path.isfile(caminhodestino):
                     try:
-                        aux.adicionarcabecalhopdf(caminhodestino, caminhodestino,
-                                                  cod, codigobarras=False)
+                        aux.adicionarcabecalhopdf_topo_adaptativo(
+                            caminhodestino, caminhodestino, cod)
                     except Exception:
                         pass
-                else:
-                    dadosiptu = [cod, nriptu, anoextracao, 'Verificar (Extrair Manualmente)']
 
         # ── Extrai dados do PDF se existir ──
         if os.path.isfile(caminhodestino):
@@ -528,13 +659,11 @@ def _html_para_pdf(caminho_html: str, caminho_pdf: str, base_url: str = ''):
         try:
             page.goto(url_local, wait_until="networkidle", timeout=30000)
             page.pdf(path=caminho_pdf, format="A4", print_background=True)
-            print(f"[OK] Certidão salva em: {caminho_pdf}")
+            console.print(f"[green]\\[OK] Certidão salva em: {caminho_pdf}[/green]")
         finally:
             browser.close()
 
-    # Remove HTML temporário
-    if os.path.isfile(caminho_html):
-        os.remove(caminho_html)
+    # Remoção do HTML temporário feita pelo chamador (finally block)
 
 
 def _resolver_captcha_imagem(session: requests.Session, url_captcha: str,
@@ -543,7 +672,9 @@ def _resolver_captcha_imagem(session: requests.Session, url_captcha: str,
     Baixa a imagem do CAPTCHA e resolve via AntiCaptcha.
     Retorna: (texto_resolvido, solver) — o solver é retornado pra poder reportar erro depois.
     """
-    caminho_captcha = os.path.join(pasta_download, 'captcha.png')
+    import tempfile
+    fd, caminho_captcha = tempfile.mkstemp(suffix='.png', prefix='captcha_', dir=pasta_download)
+    os.close(fd)
 
     try:
         headers = {
@@ -554,14 +685,22 @@ def _resolver_captcha_imagem(session: requests.Session, url_captcha: str,
             headers['Referer'] = url_referer
 
         resp = session.get(url_captcha, headers=headers, timeout=30)
+        content_type = resp.headers.get('Content-Type', '')
         if resp.status_code == 200 and len(resp.content) > 100:
+            # Verifica se realmente é imagem (servidor pode retornar HTML de erro)
+            if 'text/html' in content_type or resp.content[:5] in (b'<html', b'<!DOC', b'<HTML'):
+                console.print(f"[yellow]\\[CAPTCHA] Servidor retornou HTML em vez de imagem ({len(resp.content)} bytes). Aguardando 10s...[/yellow]")
+                import time
+                time.sleep(10)
+                return None, None
+
             # Converte pra PNG (AntiCaptcha só aceita JPEG/PNG/GIF)
             from PIL import Image
             from io import BytesIO
             img = Image.open(BytesIO(resp.content))
             img.save(caminho_captcha, 'PNG')
 
-            print(f"[CAPTCHA] Imagem baixada: {len(resp.content)} bytes, convertida pra PNG")
+            # Log silencioso — resumo impresso pelo chamador
 
             solver = imagecaptcha()
             solver.set_verbose(0)
@@ -569,16 +708,19 @@ def _resolver_captcha_imagem(session: requests.Session, url_captcha: str,
 
             texto = solver.solve_and_return_solution(caminho_captcha)
 
-            # Limpa arquivo temporário
-            if os.path.isfile(caminho_captcha):
-                os.remove(caminho_captcha)
-
             if texto and len(str(texto)) > 0:
                 return texto, solver
         else:
-            print(f"[CAPTCHA] Imagem muito pequena ou erro: status={resp.status_code}, tamanho={len(resp.content)} bytes")
+            console.print(f"[yellow]\\[CAPTCHA] Imagem muito pequena ou erro: status={resp.status_code}, tamanho={len(resp.content)} bytes[/yellow]")
     except Exception as e:
-        print(f"[CAPTCHA] Erro ao resolver: {e}")
+        console.print(f"[red]\\[CAPTCHA] Erro ao resolver: {e}[/red]")
+    finally:
+        # Sempre apaga o captcha.png, mesmo em caso de erro
+        if os.path.isfile(caminho_captcha):
+            try:
+                os.remove(caminho_captcha)
+            except Exception:
+                pass
 
     return None, None
 
@@ -622,11 +764,28 @@ def extraircertidaonegativa_requests(objeto, linha, dataatual=''):
             resolveu = False
 
             session = requests.Session()
+            # Retry automático para ConnectionResetError / ConnectionError
+            from urllib3.util.retry import Retry
+            from requests.adapters import HTTPAdapter
+            retry_strategy = Retry(
+                total=3, backoff_factor=2,
+                status_forcelist=[429, 500, 502, 503, 504],
+            )
+            session.mount('http://', HTTPAdapter(max_retries=retry_strategy))
+            session.mount('https://', HTTPAdapter(max_retries=retry_strategy))
+
             session.headers.update({
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
             })
+
+            captcha_tentativas = 0
+            captcha_erros = 0
+
+            def _captcha_msg(nriptu, tentativas, erros, extra=''):
+                erros_txt = f', {erros} erro(s)' if erros else ''
+                return f"\\[CAPTCHA] {nriptu}: tentativa {tentativas}{erros_txt}{extra}"
 
             for tentativa in range(limitetentativas):
                 if resolveu:
@@ -648,10 +807,17 @@ def extraircertidaonegativa_requests(objeto, linha, dataatual=''):
                         dadosiptu = [cod, nriptu, anoextracao, erro_pagina.text.strip(), 'N/A']
                         break
 
-                    # 2. Resolve CAPTCHA
-                    texto_captcha, solver_captcha = _resolver_captcha_imagem(
-                        session, url_captcha, objeto.pastadownload, url_referer=url_base)
+                    # 2. Resolve CAPTCHA (spinner só durante a resolução)
+                    captcha_tentativas += 1
+                    with console.status(
+                        _captcha_msg(nriptu, captcha_tentativas, captcha_erros, ' — resolvendo...'),
+                        spinner='dots'
+                    ):
+                        texto_captcha, solver_captcha = _resolver_captcha_imagem(
+                            session, url_captcha, objeto.pastadownload, url_referer=url_base)
                     if not texto_captcha:
+                        captcha_erros += 1
+                        console.print(f"[yellow]{_captcha_msg(nriptu, captcha_tentativas, captcha_erros, ' — falhou')}[/yellow]")
                         dadosiptu = [cod, nriptu, anoextracao, 'Problema Captcha', 'N/A']
                         continue
 
@@ -675,6 +841,7 @@ def extraircertidaonegativa_requests(objeto, linha, dataatual=''):
 
                     # Captcha errado? Reporta ao AntiCaptcha pra estorno
                     if 'Código digitado não confere' in html_resp:
+                        captcha_erros += 1
                         if solver_captcha:
                             solver_captcha.report_incorrect_image_captcha()
                         continue
@@ -684,6 +851,20 @@ def extraircertidaonegativa_requests(objeto, linha, dataatual=''):
                         dadosiptu = [cod, nriptu, anoextracao, 'Inscrição inválida!', 'N/A']
                         resolveu = True
                         break
+
+                    # Sessão expirada? Precisa refazer do zero (nova sessão)
+                    if 'expirada' in html_resp.lower() or 'sessão expirada' in html_resp.lower():
+                        session.close()
+                        session = requests.Session()
+                        session.mount('http://', HTTPAdapter(max_retries=retry_strategy))
+                        session.mount('https://', HTTPAdapter(max_retries=retry_strategy))
+                        session.headers.update({
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                            'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+                        })
+                        console.print(f"[yellow]\\[CERTIDÃO] Sessão expirada para {nriptu}, recriando sessão...[/yellow]")
+                        continue
 
                     # Verifica msg de erro (ctl00_ePortalContent_MSG)
                     soup_resp = BeautifulSoup(html_resp, 'html.parser')
@@ -698,9 +879,9 @@ def extraircertidaonegativa_requests(objeto, linha, dataatual=''):
                     caminho_arquivo = os.path.join(objeto.pastadownload, caminhodestino)
 
                     # Salva HTML cru e converte pra PDF via Playwright
+                    caminho_html_temp = os.path.abspath(
+                        caminho_arquivo.replace('.pdf', '.html'))
                     try:
-                        caminho_html_temp = os.path.abspath(
-                            caminho_arquivo.replace('.pdf', '.html'))
                         with open(caminho_html_temp, 'wb') as f:
                             f.write(resp.content)
 
@@ -710,6 +891,13 @@ def extraircertidaonegativa_requests(objeto, linha, dataatual=''):
                     except Exception as e:
                         dadosiptu = [cod, nriptu, anoextracao, f'Erro ao salvar: {str(e)}', 'N/A']
                         break
+                    finally:
+                        # Garante remoção do HTML temporário
+                        if os.path.isfile(caminho_html_temp):
+                            try:
+                                os.remove(caminho_html_temp)
+                            except Exception:
+                                pass
 
                     if os.path.isfile(caminho_arquivo):
                         dfdivida = aux.extrairtextopdf(caminho_arquivo, 'DIVIDAS')
@@ -722,8 +910,14 @@ def extraircertidaonegativa_requests(objeto, linha, dataatual=''):
                             novonomearquivo = os.path.join(objeto.pastadownload, caminhodestino)
 
                         try:
-                            aux.adicionarcabecalhopdf(caminho_arquivo, novonomearquivo,
-                                                      aux.left(cod, 4))
+                            aux.adicionarcabecalhopdf_topo_adaptativo(
+                                caminho_arquivo, novonomearquivo, aux.left(cod, 4))
+                            # Apaga o original se foi movido pra subpasta
+                            if (os.path.normpath(caminho_arquivo) != os.path.normpath(novonomearquivo)
+                                    and os.path.isfile(caminho_arquivo)
+                                    and os.path.isfile(novonomearquivo)):
+                                os.remove(caminho_arquivo)
+                            caminho_arquivo = novonomearquivo
                         except Exception:
                             pass
                     else:
@@ -731,11 +925,40 @@ def extraircertidaonegativa_requests(objeto, linha, dataatual=''):
                         dadosiptu = [cod, nriptu, anoextracao, 'Verificar (Extrair Manualmente)',
                                      possui_divida]
 
+                except (ConnectionError, requests.exceptions.ConnectionError) as e:
+                    # Servidor resetou conexão — aguarda antes de tentar de novo
+                    import time
+                    wait = min(5 * (tentativa + 1), 30)
+                    console.print(f"[yellow]\\[CERTIDÃO] Conexão resetada, aguardando {wait}s...[/yellow]")
+                    time.sleep(wait)
+                    # Recria sessão (cookies/socket podem estar corrompidos)
+                    session.close()
+                    session = requests.Session()
+                    session.mount('http://', HTTPAdapter(max_retries=retry_strategy))
+                    session.mount('https://', HTTPAdapter(max_retries=retry_strategy))
+                    session.headers.update({
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+                    })
+                    if tentativa == limitetentativas - 1:
+                        dadosiptu = [cod, nriptu, anoextracao, f'Erro: {str(e)}', 'N/A']
                 except Exception as e:
                     if tentativa == limitetentativas - 1:
                         dadosiptu = [cod, nriptu, anoextracao, f'Erro: {str(e)}', 'N/A']
 
             session.close()
+
+            # Resumo do captcha pra esta inscrição
+            if captcha_tentativas > 0:
+                cor = 'green' if resolveu else 'red'
+                status_txt = 'OK' if resolveu else 'FALHA'
+                erros_txt = f', {captcha_erros} erro(s)' if captcha_erros else ''
+                console.print(f"[{cor}]\\[CAPTCHA] {nriptu}: {captcha_tentativas}x tentativa(s){erros_txt} — {status_txt}[/{cor}]")
+
+            # Data limite (impresso após o resumo de captcha)
+            if dfdivida is not None and 'Data_Limite' in dfdivida:
+                console.print(f"[cyan]Data limite encontrada: {dfdivida['Data_Limite']}[/cyan]")
 
     # ── Extrai dados do PDF se existir ──
     caminho_arquivo = caminhodestino if not caminho_arquivo else caminho_arquivo
@@ -1142,30 +1365,37 @@ def _resolver_recaptcha_v2(page_url: str, sitekey: str) -> str | None:
         m, s = divmod(int(seg), 60)
         return f"{m:02d}:{s:02d}"
 
-    console.print(f"[cyan][CAPTCHA][/] Resolvendo reCAPTCHA v2...")
+    with _print_lock:
+        console.print(f"[cyan]\\[CAPTCHA] Resolvendo reCAPTCHA v2...[/cyan]")
     while not finalizado.wait(timeout=5):
         pass  # Mantém a thread ativa pra o Live continuar atualizando
 
     elapsed = _time.time() - inicio
 
     if resultado[0]:
-        console.print(f"[green][CAPTCHA][/] Resolvido em {_fmt(elapsed)} ({len(resultado[0])} chars)")
+        with _print_lock:
+            console.print(f"[green]\\[CAPTCHA] Resolvido em {_fmt(elapsed)} ({len(resultado[0])} chars)[/green]")
         return resultado[0]
     else:
-        console.print(f"[red][CAPTCHA][/] Falha em {_fmt(elapsed)}: {erro[0]}")
+        with _print_lock:
+            console.print(f"[red]\\[CAPTCHA] Falha em {_fmt(elapsed)}: {erro[0]}[/red]")
         return None
 
 
 def _submeter_busca_bombeiros(page: Page, campos: dict,
                               destino: str = 'imovel/busca',
-                              endpoint: str = '/sistema/imovel/busca') -> tuple[bool, str]:
+                              endpoint: str = '/sistema/imovel/busca',
+                              _log: list | None = None) -> tuple[bool, str]:
     """
     Submete a busca no site dos Bombeiros via fetch.
     campos: dict com os campos do form (cbmerj/cbmerj_dv ou inscricao/municipio).
     destino: valor do campo hidden 'destino' (varia por aba).
     endpoint: URL do POST (varia por aba).
+    _log: se fornecido, acumula mensagens em vez de imprimir.
     Retorna: (sucesso, mensagem_erro)
     """
+    _msg = lambda m: _log.append(m) if _log is not None else console.print(m)
+
     # Resolve reCAPTCHA v2 via AntiCaptcha
     sitekey = _detectar_sitekey_v2(page) or SITEKEY_BOMBEIROS
     token, _ = resolver_captcha('recaptchav2', page_url=URL_IFRAME_BOMBEIROS, sitekey=sitekey)
@@ -1206,9 +1436,9 @@ def _submeter_busca_bombeiros(page: Page, campos: dict,
         tam_post = len(html_resp)
         tam_post_fmt = f"{tam_post / 1024:.1f} KB" if tam_post >= 1024 else f"{tam_post} B"
         if tam_post < 500:
-            console.print(f"[yellow][AVISO][/] POST resposta: status {status}, tamanho: {tam_post_fmt} — resposta muito pequena, possível erro")
+            _msg(f"[yellow]\\[AVISO] POST resposta: status {status}, tamanho: {tam_post_fmt} — resposta muito pequena, possível erro[/yellow]")
         else:
-            console.print(f"[cyan][PW][/] POST resposta: status {status}, tamanho: {tam_post_fmt}")
+            _msg(f"[cyan]\\[PW] POST resposta: status {status}, tamanho: {tam_post_fmt}[/cyan]")
 
         if 'Dados Cadastrais' in html_resp or 'Vencimentos' in html_resp:
             # NÃO usar page.set_content() — perde a sessão/cookies do site.
@@ -1219,14 +1449,14 @@ def _submeter_busca_bombeiros(page: Page, campos: dict,
             return False, "Imóvel não encontrado"
         else:
             trecho = html_resp[:500].replace('\n', ' ')
-            console.print(f"[dim][DEBUG][/] Resposta: {trecho}")
+            _msg(f"[dim]\\[DEBUG] Resposta: {trecho}[/dim]")
             return False, f"Resposta inesperada (status {status})"
     else:
         return False, "Sem resposta do servidor"
 
 
 def _navegar_bombeiros(page: Page, nrcbm: str, nriptu: str = '',
-                       cidade: str = '') -> tuple[bool, str]:
+                       cidade: str = '', _log: list | None = None) -> tuple[bool, str]:
     """
     Playwright: navega ao iframe de busca dos Bombeiros.
     Ordem de tentativa:
@@ -1235,6 +1465,8 @@ def _navegar_bombeiros(page: Page, nrcbm: str, nriptu: str = '',
     Se não tiver nenhum dos dois, retorna erro sem navegar.
     (Busca por CPF/CNPJ não implementada — requer autenticação gov.br)
     """
+    _msg = lambda m: _log.append(m) if _log is not None else console.print(m)
+
     nrcbm_limpo = nrcbm.replace('-', '').replace('.', '').replace(' ', '')
     nriptu_limpo = nriptu.replace('.', '').replace('-', '').replace(' ', '')
 
@@ -1254,21 +1486,21 @@ def _navegar_bombeiros(page: Page, nrcbm: str, nriptu: str = '',
             inscricao = nrcbm_limpo[:-1]
             dv = nrcbm_limpo[-1]
 
-            console.print(f"[cyan][PW][/] Buscando por CBMERJ: {inscricao}-{dv}")
+            _msg(f"[cyan]\\[PW] Buscando por CBMERJ: {inscricao}-{dv}[/cyan]")
             page.fill("input[name='cbmerj']", inscricao)
             page.fill("input[name='cbmerj_dv']", dv)
 
             sucesso, erro = _submeter_busca_bombeiros(page, {
                 'cbmerj': inscricao,
                 'cbmerj_dv': dv,
-            })
+            }, _log=_log)
 
             if sucesso:
                 return True, ""
 
             # Não encontrou — tenta inscrição predial
             if tem_iptu:
-                console.print(f"[yellow][PW][/] CBMERJ não encontrado, tentando por inscrição predial...")
+                _msg(f"[yellow]\\[PW] CBMERJ não encontrado, tentando por inscrição predial...[/yellow]")
                 page.goto(URL_IFRAME_BOMBEIROS, wait_until="networkidle", timeout=60000)
                 page.wait_for_selector("input[name='cbmerj']", state="visible", timeout=15000)
             else:
@@ -1280,7 +1512,7 @@ def _navegar_bombeiros(page: Page, nrcbm: str, nriptu: str = '',
             page.evaluate("() => { const btn = document.querySelector('#btnIP'); if (btn) btn.click(); }")
             page.wait_for_timeout(500)
             cod_municipio = _resolver_codigo_municipio(page, cidade)
-            console.print(f"[cyan][PW][/] Buscando por inscrição predial: {nriptu_limpo} | Município: {cidade or 'Rio de Janeiro'} ({cod_municipio})")
+            _msg(f"[cyan]\\[PW] Buscando por inscrição predial: {nriptu_limpo} | Município: {cidade or 'Rio de Janeiro'} ({cod_municipio})[/cyan]")
 
             sucesso, erro = _submeter_busca_bombeiros(
                 page,
@@ -1290,6 +1522,7 @@ def _navegar_bombeiros(page: Page, nrcbm: str, nriptu: str = '',
                 },
                 destino='imovel/busca-inscricao-predial',
                 endpoint='/sistema/imovel/busca-inscricao-predial',
+                _log=_log,
             )
 
             if sucesso:
@@ -1302,11 +1535,13 @@ def _navegar_bombeiros(page: Page, nrcbm: str, nriptu: str = '',
         return False, f"Erro na navegação: {str(e)}"
 
 
-def _extrair_debitos_bombeiros(page: Page) -> list[dict]:
+def _extrair_debitos_bombeiros(page: Page, _log: list | None = None) -> list[dict]:
     """
     Parseia a tabela de vencimentos da página de resultado.
     Retorna lista de dicts com dados de cada exercício com DÉBITO.
     """
+    _msg = lambda m: _log.append(m) if _log is not None else console.print(m)
+
     debitos = []
     # HTML pode estar em window._htmlBombeiros (via fetch) ou no page.content() (navegação real)
     html = page.evaluate("() => window._htmlBombeiros || null") or page.content()
@@ -1329,7 +1564,7 @@ def _extrair_debitos_bombeiros(page: Page) -> list[dict]:
                 tabela = proximo
 
     if not tabela:
-        console.print("[yellow][AVISO][/] Nenhuma tabela de vencimentos encontrada")
+        _msg(f"[yellow]\\[AVISO] Nenhuma tabela de vencimentos encontrada[/yellow]")
         return debitos
 
     for linha in tabela.find_all('tr')[1:]:  # pula header
@@ -1369,11 +1604,14 @@ def _extrair_debitos_bombeiros(page: Page) -> list[dict]:
     return com_debito
 
 
-def _baixar_boleto_bombeiros(page: Page, form_fields: dict) -> bytes | None:
+def _baixar_boleto_bombeiros(page: Page, form_fields: dict,
+                             _log: list | None = None) -> bytes | None:
     """
     Gera o boleto via Playwright interceptando a resposta do POST.
+    _log: se fornecido, acumula mensagens em vez de imprimir.
     Retorna bytes do PDF ou None.
     """
+    _msg = lambda m: _log.append(m) if _log is not None else console.print(m)
     url_boleto = 'https://www.funesbom.rj.gov.br/sistema/pagamentos/gerar/boletoSemRegistro'
 
     try:
@@ -1416,9 +1654,9 @@ def _baixar_boleto_bombeiros(page: Page, form_fields: dict) -> bytes | None:
             tamanho = resultado.get('size', len(pdf_bytes))
             tam_fmt = f"{tamanho / 1024:.1f} KB" if tamanho >= 1024 else f"{tamanho} B"
             if tamanho < 5000:
-                console.print(f"[yellow][AVISO][/] Boleto recebido: {tam_fmt}, tipo: {content_type} — tamanho suspeito, pode não ser PDF válido")
+                _msg(f"[yellow]\\[AVISO] Boleto recebido: {tam_fmt}, tipo: {content_type} — tamanho suspeito, pode não ser PDF válido[/yellow]")
             else:
-                console.print(f"[green][OK][/] Boleto recebido: {tam_fmt}, tipo: {content_type}")
+                _msg(f"[green]\\[OK] Boleto recebido: {tam_fmt}, tipo: {content_type}[/green]")
 
             # Verifica se é realmente PDF
             if pdf_bytes[:4] == b'%PDF':
@@ -1427,25 +1665,29 @@ def _baixar_boleto_bombeiros(page: Page, form_fields: dict) -> bytes | None:
                 # Pode ser HTML de erro
                 try:
                     texto = pdf_bytes.decode('utf-8', errors='replace')[:500]
-                    console.print(f"[yellow][AVISO][/] Resposta não é PDF: {texto}")
+                    _msg(f"[yellow]\\[AVISO] Resposta não é PDF: {texto}[/yellow]")
                 except:
                     pass
                 return None
         else:
             erro = resultado.get('error', 'desconhecido') if resultado else 'sem resposta'
-            console.print(f"[red][ERRO][/] Falha ao baixar boleto: {erro}")
+            _msg(f"[red]\\[ERRO] Falha ao baixar boleto: {erro}[/red]")
             return None
 
     except Exception as e:
-        console.print(f"[red][ERRO][/] Exceção ao baixar boleto: {str(e)}")
+        _msg(f"[red]\\[ERRO] Exceção ao baixar boleto: {str(e)}[/red]")
         return None
 
 
 def extrairbombeiros_hibrido(page: Page, objeto, linha, dataatual=''):
     """
     Extrai boleto de bombeiros usando Playwright + AntiCaptcha reCAPTCHA v2.
+    Acumula todas as mensagens em memória e imprime de uma vez no final.
     Retorna: (dados_list, df) — dados_list: [codigo, nrcbm, ano, status], df: DataFrame ou None
     """
+    # ── Backlog: acumula mensagens e imprime tudo junto no final ──
+    _log: list[str] = []
+
     if dataatual == '':
         dataatual = aux.hora('America/Sao_Paulo', 'DATA')
 
@@ -1463,6 +1705,8 @@ def extrairbombeiros_hibrido(page: Page, objeto, linha, dataatual=''):
     if not cod:
         cod = nrcbm_limpo
 
+    _log.append(f"[bold]━━━ {cod} | CBM: {nrcbm} ━━━[/bold]")
+
     os.makedirs(objeto.pastadownload, exist_ok=True)
 
     # Verifica se já existe algum arquivo desse cliente na pasta (skip por cliente)
@@ -1472,23 +1716,28 @@ def extrairbombeiros_hibrido(page: Page, objeto, linha, dataatual=''):
         if f.startswith(prefixo) and f.endswith('.pdf')
     ]
     if arquivos_existentes:
-        console.print(f"[yellow][SKIP][/] Cliente {cod} já tem {len(arquivos_existentes)} arquivo(s) na pasta — pulando")
+        _log.append(f"[yellow]\\[SKIP] Cliente {cod} já tem {len(arquivos_existentes)} arquivo(s) na pasta — pulando[/yellow]")
+        _flush_log(_log)
         return [cod, nrcbm, anoextracao, f'SKIP ({len(arquivos_existentes)} arquivo(s) existente(s))'], None
 
     # Navegação (tenta CBMERJ, fallback pra inscrição predial/IPTU)
-    sucesso, erro = _navegar_bombeiros(page, nrcbm, nriptu=nriptu, cidade=cidade)
+    sucesso, erro = _navegar_bombeiros(page, nrcbm, nriptu=nriptu, cidade=cidade, _log=_log)
     if not sucesso:
+        _log.append(f"[red]\\[ERRO] {erro}[/red]")
+        _flush_log(_log)
         return [cod, nrcbm, anoextracao, erro], None
 
     # Extrai débitos
-    debitos = _extrair_debitos_bombeiros(page)
+    debitos = _extrair_debitos_bombeiros(page, _log=_log)
     if not debitos:
+        _log.append(f"[yellow]\\[INFO] Sem débitos[/yellow]")
+        _flush_log(_log)
         return [cod, nrcbm, anoextracao, 'Sem débitos'], None
 
-    console.print(f"[cyan][PW][/] {len(debitos)} débito(s) encontrado(s)")
+    _log.append(f"[cyan]\\[PW] {len(debitos)} débito(s) encontrado(s)[/cyan]")
     for d in debitos:
-        console.print(f"  Exercício {d['exercicio']} | Venc: {d['vencimento']} | "
-                       f"Taxa: {d['taxa']} | Multa: {d['multa']} | Sit: {d['situacao']}")
+        _log.append(f"[dim]  Exercício {d['exercicio']} | Venc: {d['vencimento']} | "
+                     f"Taxa: {d['taxa']} | Multa: {d['multa']} | Sit: {d['situacao']}[/dim]")
 
     # Baixa boleto de cada exercício com débito
     df_total = None
@@ -1503,15 +1752,15 @@ def extrairbombeiros_hibrido(page: Page, objeto, linha, dataatual=''):
         caminhodestino = os.path.join(objeto.pastadownload, nome_arquivo)
 
         if os.path.isfile(caminhodestino):
-            console.print(f"[yellow][SKIP][/] Já existe: {os.path.basename(caminhodestino)}")
+            _log.append(f"[yellow]\\[SKIP] Já existe: {os.path.basename(caminhodestino)}[/yellow]")
             baixados += 1
             continue
 
         if not debito['form_fields']:
-            console.print(f"[yellow][AVISO][/] Exercício {ano} sem formulário de boleto")
+            _log.append(f"[yellow]\\[AVISO] Exercício {ano} sem formulário de boleto[/yellow]")
             continue
 
-        pdf_bytes = _baixar_boleto_bombeiros(page, debito['form_fields'])
+        pdf_bytes = _baixar_boleto_bombeiros(page, debito['form_fields'], _log=_log)
         if pdf_bytes:
             with open(caminhodestino, 'wb') as f:
                 f.write(pdf_bytes)
@@ -1520,11 +1769,11 @@ def extrairbombeiros_hibrido(page: Page, objeto, linha, dataatual=''):
             # Adiciona cabeçalho (mesmo padrão do fluxo-pw-new: origem = destino)
             try:
                 aux.adicionarcabecalhopdf_topo_adaptativo(caminhodestino, caminhodestino, cod)
-                console.print(f"[green][OK][/] Boleto {ano}: {os.path.basename(caminhodestino)} "
-                              f"({tamanho_kb:.1f} KB) [dim]— cabeçalho: {cod}[/]")
+                _log.append(f"[green]\\[OK] Boleto {ano}: {os.path.basename(caminhodestino)} "
+                            f"({tamanho_kb:.1f} KB) — cabeçalho: {cod}[/green]")
             except Exception as e:
-                console.print(f"[green][OK][/] Boleto {ano}: {os.path.basename(caminhodestino)} "
-                              f"({tamanho_kb:.1f} KB) [yellow](sem cabeçalho: {e})[/]")
+                _log.append(f"[green]\\[OK] Boleto {ano}: {os.path.basename(caminhodestino)} "
+                            f"({tamanho_kb:.1f} KB)[/green] [yellow](sem cabeçalho: {e})[/yellow]")
 
             baixados += 1
 
@@ -1538,14 +1787,17 @@ def extrairbombeiros_hibrido(page: Page, objeto, linha, dataatual=''):
                     df.insert(loc=5, column='Arquivo', value=["'" + caminhodestino + "'" for _ in range(total_rows)])
                     df_total = pd.concat([df_total, df]) if df_total is not None else df
             except Exception as e:
-                console.print(f"[yellow][AVISO][/] Erro ao extrair dados do PDF {ano}: {str(e)}")
+                _log.append(f"[yellow]\\[AVISO] Erro ao extrair dados do PDF {ano}: {str(e)}[/yellow]")
         else:
-            console.print(f"[red][ERRO][/] Falha ao baixar boleto {ano}")
+            _log.append(f"[red]\\[ERRO] Falha ao baixar boleto {ano}[/red]")
 
     if baixados > 0:
-        console.print(f"\n[bold green][RESUMO][/] {baixados}/{len(debitos)} boleto(s) baixado(s)")
+        _log.append(f"[bold green]\\[RESUMO] {baixados}/{len(debitos)} boleto(s) baixado(s)[/bold green]")
+        _flush_log(_log)
         return [cod, nrcbm, anoextracao, f'OK ({baixados} boleto(s))'], df_total
-    console.print(f"\n[bold red][RESUMO][/] Nenhum boleto baixado")
+
+    _log.append(f"[bold red]\\[RESUMO] Nenhum boleto baixado[/bold red]")
+    _flush_log(_log)
     return [cod, nrcbm, anoextracao, 'Não conseguiu baixar boleto'], None
 
 
