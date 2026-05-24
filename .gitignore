@@ -46,10 +46,11 @@ webapp.db-journal
 # ────────────────────────────────────────────────────────────
 # Pastas de execução/saída
 # ────────────────────────────────────────────────────────────
-/Downloads/
-/Profile/
-/chrome-profile/
-/logs/
+# (sem slash inicial = match em qualquer subpasta também)
+Downloads/
+Profile/
+chrome-profile/
+logs/
 *.xlsx
 *.txt
 favicon.ico
