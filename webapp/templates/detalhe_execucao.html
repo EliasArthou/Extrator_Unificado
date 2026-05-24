@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Execução #{{ exec.id }} - ExtratorUnificado{% endblock %}
+{% block nav_historico %}active{% endblock %}
+{% block page_title %}Execução #{{ exec.id }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/execucao/{{ exec.id }}/download" class="btn btn-sm btn-outline-primary">
+    <i class="bi bi-download"></i> Log .txt
+</a>
+{% if erros %}
+<a href="/execucao/{{ exec.id }}/erros" class="btn btn-sm btn-outline-danger">
+    <i class="bi bi-download"></i> Erros .json
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-lg-8">
+        <!-- Resumo -->
+        <div class="card mb-4">
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="bi bi-file-earmark-text" style="color: var(--edx-accent);"></i>
+                <h5 class="mb-0">Detalhes da Execução</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-sm table-borderless mb-0">
+                            <tr><td class="text-muted" style="width:100px">Tipo</td><td class="fw-bold">{{ exec.tipo }}{% if exec.subtipo %} / {{ exec.subtipo }}{% endif %}</td></tr>
+                            <tr><td class="text-muted">Status</td><td>
+                                {% if exec.status == 'concluido' %}
+                                <span class="badge bg-success">Concluído</span>
+                                {% elif exec.status == 'erro' %}
+                                <span class="badge bg-danger">Erro</span>
+                                {% elif exec.status == 'rodando' %}
+                                <span class="badge bg-primary"><i class="bi bi-arrow-repeat spin"></i> Rodando</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ exec.status }}</span>
+                                {% endif %}
+                            </td></tr>
+                            <tr><td class="text-muted">Iniciado</td><td>{{ exec.iniciado_em.strftime('%d/%m/%Y %H:%M:%S') if exec.iniciado_em else '-' }}</td></tr>
+                            <tr><td class="text-muted">Finalizado</td><td>{{ exec.finalizado_em.strftime('%d/%m/%Y %H:%M:%S') if exec.finalizado_em else '-' }}</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table table-sm table-borderless mb-0">
+                            <tr><td class="text-muted" style="width:80px">Total</td><td class="fw-bold">{{ exec.total_registros }}</td></tr>
+                            <tr><td class="text-muted">OK</td><td><span class="text-success fw-bold">{{ exec.registros_ok }}</span></td></tr>
+                            <tr><td class="text-muted">Erros</td><td><span class="text-danger fw-bold">{{ exec.registros_erro }}</span></td></tr>
+                            <tr><td class="text-muted">Duração</td><td>
+                                {% if exec.duracao_seg %}
+                                    {% set h = (exec.duracao_seg // 3600)|int %}
+                                    {% set m = ((exec.duracao_seg % 3600) // 60)|int %}
+                                    {% set s = (exec.duracao_seg % 60)|int %}
+                                    {% if h > 0 %}{{ h }}h {{ m }}m {{ s }}s{% elif m > 0 %}{{ m }}m {{ s }}s{% else %}{{ s }}s{% endif %}
+                                {% else %}-{% endif %}
+                            </td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Log completo -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-terminal" style="color: var(--edx-accent);"></i>
+                    <h6 class="mb-0">Log Completo</h6>
+                </div>
+                <span class="badge bg-secondary">{{ log_linhas|length }} linhas</span>
+            </div>
+            <div class="card-body p-0">
+                {% if log_linhas %}
+                <div class="log-viewer">
+                    <pre class="mb-0 p-3" style="max-height: 500px; overflow-y: auto; font-size: 0.8rem; background: #0d1117; color: #d4d4d4; border-radius: 0 0 10px 10px;">{% for linha in log_linhas %}
+<span class="{% if 'ERRO' in linha %}text-danger fw-bold{% elif 'OK' in linha %}text-success{% elif 'INICIO' in linha or 'FIM' in linha %}text-info{% endif %}">{{ linha }}</span>
+{% endfor %}</pre>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-journal display-6"></i>
+                    <p class="mt-2 small">Log não disponível para esta execução</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Painel lateral: Erros -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-exclamation-triangle" style="color: var(--edx-danger);"></i>
+                    <h6 class="mb-0">Erros</h6>
+                </div>
+                <span class="badge bg-danger">{{ erros|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                {% if erros %}
+                <div class="list-group list-group-flush" style="max-height: 600px; overflow-y: auto;">
+                    {% for e in erros %}
+                    <div class="list-group-item py-2">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <span class="fw-bold small text-danger">Cód. {{ e.codigo }}</span>
+                                <span class="text-muted small">| {{ e.contexto }}</span>
+                            </div>
+                            <span class="badge bg-light text-dark" style="font-size: 0.7rem;">{{ e.hora }}</span>
+                        </div>
+                        <div class="small text-muted mt-1">{{ e.erro }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-check-circle display-6" style="color: var(--edx-success);"></i>
+                    <p class="mt-2 small">Nenhum erro registrado</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <a href="/historico" class="btn btn-outline-secondary w-100 mt-3">
+            <i class="bi bi-arrow-left"></i> Voltar ao Histórico
+        </a>
+    </div>
+</div>
+{% endblock %}

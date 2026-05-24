@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% block title %}Fontes de Dados - {{ empresa.nome }}{% endblock %}
+{% block nav_empresas %}active{% endblock %}
+{% block page_title %}
+    <a href="/admin/empresas" class="text-decoration-none" style="color:var(--edx-accent);">
+        <i class="bi bi-arrow-left me-1"></i>Empresas
+    </a>
+    <i class="bi bi-chevron-right small mx-1" style="color:var(--edx-text-muted);"></i>
+    <a href="/admin/empresas" class="text-decoration-none" style="color:var(--edx-text);">{{ empresa.nome }}</a>
+    <i class="bi bi-chevron-right small mx-1" style="color:var(--edx-text-muted);"></i>
+    Fontes de Dados
+{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-lg-9">
+        <!-- Info da Empresa -->
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="fw-bold">{{ empresa.nome }}</span>
+                        {% if empresa.cnpj %}
+                        <span class="text-muted small ms-2">{{ empresa.cnpj }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="small text-muted">
+                            <i class="bi bi-key"></i> Chave API:
+                            <code class="user-select-all">{{ empresa.chave_api[:12] }}...</code>
+                            <button class="btn btn-sm border-0 p-0 ms-1" style="color:var(--edx-accent);"
+                                    onclick="navigator.clipboard.writeText('{{ empresa.chave_api }}')" title="Copiar chave completa">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </span>
+                        <form method="POST" action="/admin/empresas/{{ empresa.id }}/regenerar-chave" class="d-inline"
+                              onsubmit="return confirm('Regenerar chave? O helper precisará relogar para atualizar.')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <button type="submit" class="btn btn-sm btn-outline-warning" title="Regenerar chave API">
+                                <i class="bi bi-arrow-repeat"></i> Regenerar
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabela de Fontes -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-database" style="color: var(--edx-admin-accent);"></i>
+                    <h5 class="mb-0">Fontes de Dados</h5>
+                </div>
+                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaFonte">
+                    <i class="bi bi-plus-lg"></i> Nova Fonte
+                </button>
+            </div>
+
+            <div class="card-body p-0">
+                {% if fontes %}
+                <div class="list-group list-group-flush">
+                    {% for fonte in fontes %}
+                    <div class="list-group-item py-3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="fw-bold">{{ fonte.nome_fonte }}</span>
+                                    <span class="badge bg-primary">{{ fonte.tipo_extracao }}</span>
+                                    <span class="badge bg-secondary small">v{{ fonte.versao }}</span>
+                                </div>
+                                <div class="mb-2">
+                                    <code class="small" style="background:rgba(0,0,0,0.1);padding:4px 8px;border-radius:4px;display:inline-block;max-width:100%;overflow-x:auto;white-space:nowrap;">{{ fonte.sql_select[:120] }}{% if fonte.sql_select|length > 120 %}...{% endif %}</code>
+                                </div>
+                                {% set colunas = fonte.colunas_esperadas %}
+                                {% if colunas and colunas != '[]' %}
+                                <div class="small text-muted">
+                                    <i class="bi bi-columns-gap"></i> Colunas: {{ colunas }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="d-flex gap-1 ms-3">
+                                <button class="btn btn-sm btn-outline-secondary" title="Editar"
+                                        data-bs-toggle="modal" data-bs-target="#modalEditar{{ fonte.id }}">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <form method="POST" action="/admin/empresas/{{ empresa.id }}/fontes/{{ fonte.id }}/excluir"
+                                      class="d-inline" onsubmit="return confirm('Excluir fonte {{ fonte.nome_fonte }}?')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Modal Editar Fonte -->
+                    <div class="modal fade" id="modalEditar{{ fonte.id }}" tabindex="-1">
+                        <div class="modal-dialog modal-lg">
+                            <div class="modal-content">
+                                <form method="POST" action="/admin/empresas/{{ empresa.id }}/fontes/{{ fonte.id }}/editar">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title"><i class="bi bi-pencil"></i> Editar {{ fonte.nome_fonte }}</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="mb-3">
+                                            <label class="form-label">Nome da Fonte</label>
+                                            <input type="text" class="form-control" name="nome_fonte"
+                                                   value="{{ fonte.nome_fonte }}" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Tipo de Extração</label>
+                                            <input type="text" class="form-control" value="{{ fonte.tipo_extracao }}" disabled>
+                                            <div class="form-text">O tipo não pode ser alterado após criação.</div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">SELECT SQL</label>
+                                            <textarea class="form-control font-monospace" name="sql_select"
+                                                      rows="6" required style="font-size:0.85rem;">{{ fonte.sql_select }}</textarea>
+                                            <div class="form-text">
+                                                <i class="bi bi-info-circle"></i> SQL executado pelo helper no banco Access do cliente.
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Colunas Esperadas <span class="text-muted">(JSON array)</span></label>
+                                            <input type="text" class="form-control font-monospace" name="colunas_esperadas"
+                                                   value='{{ fonte.colunas_esperadas }}' placeholder='["Codigo", "IPTU"]'>
+                                        </div>
+                                        <div class="small text-muted">
+                                            <i class="bi bi-arrow-up-circle"></i> Versão atual: <strong>{{ fonte.versao }}</strong>
+                                            — será incrementada ao salvar.
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Salvar</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-database-x display-6"></i>
+                    <p class="mt-2 small">Nenhuma fonte de dados configurada</p>
+                    <p class="small">Crie uma fonte para definir o SELECT SQL que o helper executará.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3">
+        <div class="card">
+            <div class="card-body py-4">
+                <h6 class="fw-bold mb-3"><i class="bi bi-lightbulb" style="color:var(--edx-warning);"></i> Como funciona</h6>
+                <p class="small text-muted mb-2">
+                    Cada fonte define um <strong>SELECT SQL</strong> que o helper executa no banco Access do cliente.
+                </p>
+                <p class="small text-muted mb-2">
+                    O helper baixa essas configurações ao logar e mostra as fontes disponíveis para o usuário escolher.
+                </p>
+                <p class="small text-muted mb-0">
+                    A <strong>versão</strong> incrementa a cada edição. O helper detecta a mudança e atualiza automaticamente.
+                </p>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-body py-3">
+                <h6 class="fw-bold mb-2"><i class="bi bi-code-square" style="color:var(--edx-accent);"></i> Tipos de extração</h6>
+                <div class="small text-muted">
+                    <div class="mb-1"><code>Prefeitura__IPTU</code></div>
+                    <div class="mb-1"><code>Prefeitura__IPTU_Faltante</code></div>
+                    <div class="mb-1"><code>Prefeitura__NadaConsta</code></div>
+                    <div class="mb-1"><code>Prefeitura__CertidaoNegativa</code></div>
+                    <div class="mb-1"><code>Bombeiros</code></div>
+                    <div><code>Condominios</code></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nova Fonte -->
+<div class="modal fade" id="modalNovaFonte" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="/admin/empresas/{{ empresa.id }}/fontes/criar">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-database-add"></i> Nova Fonte de Dados</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Tipo de Extração</label>
+                            <select class="form-select" name="tipo_extracao" required>
+                                <option value="">Selecione...</option>
+                                <option value="Prefeitura__IPTU">Prefeitura — IPTU</option>
+                                <option value="Prefeitura__IPTU_Faltante">Prefeitura — IPTU Faltante</option>
+                                <option value="Prefeitura__NadaConsta">Prefeitura — Nada Consta</option>
+                                <option value="Prefeitura__CertidaoNegativa">Prefeitura — Certidão Negativa</option>
+                                <option value="Bombeiros">Bombeiros</option>
+                                <option value="Condominios">Condomínios</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Nome da Fonte</label>
+                            <input type="text" class="form-control" name="nome_fonte" required
+                                   placeholder="Ex: IPTU Completo">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">SELECT SQL</label>
+                        <textarea class="form-control font-monospace" name="sql_select"
+                                  rows="6" required style="font-size:0.85rem;"
+                                  placeholder="SELECT Codigo, IPTU FROM Imoveis WHERE ..."></textarea>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i> SQL que o helper executará no banco Access (.WMB/.mdb/.accdb) do cliente.
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Colunas Esperadas <span class="text-muted">(JSON array)</span></label>
+                        <input type="text" class="form-control font-monospace" name="colunas_esperadas"
+                               placeholder='["Codigo", "IPTU"]' value="[]">
+                        <div class="form-text">
+                            Nomes das colunas que o SELECT retorna. Usado para validação e geração do template Excel.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Criar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

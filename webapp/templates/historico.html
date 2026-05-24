@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Histórico - ExtratorUnificado{% endblock %}
+{% block nav_historico %}active{% endblock %}
+{% block page_title %}Histórico de Extrações{% endblock %}
+
+{% block head %}
+<style>
+    #tblHistorico .col-data    { width: 14%; }
+    #tblHistorico .col-tipo    { width: 12%; }
+    #tblHistorico .col-subtipo { width: 12%; }
+    #tblHistorico .col-total   { width: 8%; text-align: center; }
+    #tblHistorico .col-ok      { width: 8%; text-align: center; }
+    #tblHistorico .col-erros   { width: 8%; text-align: center; }
+    #tblHistorico .col-duracao { width: 10%; }
+    #tblHistorico .col-status  { width: 10%; text-align: center; }
+    #tblHistorico .col-acoes   { width: 8%; text-align: center; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-clock-history" style="color: var(--edx-accent);"></i>
+            <h5 class="mb-0">Histórico de Extrações</h5>
+        </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="itbl-toolbar">
+        <div class="input-group itbl-search">
+            <span class="input-group-text" style="font-size:0.85rem;"><i class="bi bi-search"></i></span>
+            <input type="text" class="form-control form-control-sm" id="histSearch"
+                   placeholder="Buscar por tipo, status...">
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-sm btn-outline-secondary" id="histClear" title="Limpar filtros" style="display:none;">
+                <i class="bi bi-x-lg"></i> Limpar
+            </button>
+            <span class="itbl-count" id="histCount"></span>
+        </div>
+    </div>
+
+    <div class="card-body p-0">
+        <div class="itbl-wrap">
+            <table class="itbl" id="tblHistorico"
+                   data-itbl-search="#histSearch"
+                   data-itbl-count="#histCount"
+                   data-itbl-clear="#histClear"
+                   data-itbl-label="extração|extrações">
+                <thead>
+                    <tr>
+                        <th class="col-data" data-col="0" data-sort-type="datetime">
+                            <span class="th-label">Data/Hora <i class="bi bi-funnel col-icon"></i></span>
+                            <span class="resize-handle"></span>
+                        </th>
+                        <th class="col-tipo" data-col="1" data-filter-type="check">
+                            <span class="th-label">Tipo <i class="bi bi-funnel col-icon"></i></span>
+                            <span class="resize-handle"></span>
+                        </th>
+                        <th class="col-subtipo" data-col="2" data-filter-type="check">
+                            <span class="th-label">Subtipo <i class="bi bi-funnel col-icon"></i></span>
+                            <span class="resize-handle"></span>
+                        </th>
+                        <th class="col-total" data-col="3" data-sort-type="number">
+                            <span class="th-label">Total <i class="bi bi-funnel col-icon"></i></span>
+                        </th>
+                        <th class="col-ok" data-col="4" data-sort-type="number">
+                            <span class="th-label">OK <i class="bi bi-funnel col-icon"></i></span>
+                        </th>
+                        <th class="col-erros" data-col="5" data-sort-type="number">
+                            <span class="th-label">Erros <i class="bi bi-funnel col-icon"></i></span>
+                        </th>
+                        <th class="col-duracao" data-col="6" data-sort-type="number">
+                            <span class="th-label">Duração <i class="bi bi-funnel col-icon"></i></span>
+                        </th>
+                        <th class="col-status" data-col="7" data-filter-type="check">
+                            <span class="th-label">Status <i class="bi bi-funnel col-icon"></i></span>
+                        </th>
+                        <th class="col-acoes" data-sort-type="none">
+                            <span class="th-label" style="cursor:default;">Ações</span>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for exec in execucoes %}
+                    <tr class="{{ 'table-danger-subtle' if exec.status == 'erro' else '' }}"
+                        data-search="{{ exec.tipo|lower }} {{ (exec.subtipo or '')|lower }} {{ exec.status }}">
+                        <td class="cell-small" data-sort-value="{{ exec.iniciado_em.strftime('%Y-%m-%d %H:%M') if exec.iniciado_em else '' }}">
+                            {{ exec.iniciado_em.strftime('%d/%m/%Y %H:%M') if exec.iniciado_em else '-' }}
+                        </td>
+                        <td data-filter-value="{{ exec.tipo }}">
+                            <span class="badge bg-secondary">{{ exec.tipo }}</span>
+                        </td>
+                        <td class="cell-small" data-filter-value="{{ exec.subtipo or '-' }}">{{ exec.subtipo or '-' }}</td>
+                        <td class="text-center" data-sort-value="{{ exec.total_registros }}">{{ exec.total_registros }}</td>
+                        <td class="text-center text-success fw-bold" data-sort-value="{{ exec.registros_ok }}">{{ exec.registros_ok }}</td>
+                        <td class="text-center {{ 'text-danger fw-bold' if exec.registros_erro > 0 else 'text-muted' }}" data-sort-value="{{ exec.registros_erro }}">{{ exec.registros_erro }}</td>
+                        <td class="cell-small" data-sort-value="{{ exec.duracao_seg or 0 }}">
+                            {% if exec.duracao_seg %}
+                                {% set m = (exec.duracao_seg // 60)|int %}
+                                {% set s = (exec.duracao_seg % 60)|int %}
+                                {{ '%02d:%02d'|format(m, s) }}
+                            {% else %}-{% endif %}
+                        </td>
+                        <td class="text-center" data-filter-value="{{ exec.status|capitalize }}" data-sort-value="{{ exec.status }}">
+                            {% if exec.status == 'concluido' %}
+                            <span class="badge bg-success">Concluído</span>
+                            {% elif exec.status == 'rodando' %}
+                            <span class="badge bg-primary"><i class="bi bi-arrow-repeat spin"></i> Rodando</span>
+                            {% elif exec.status == 'erro' %}
+                            <span class="badge bg-danger">Erro</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ exec.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <a href="/execucao/{{ exec.id }}" class="btn btn-sm btn-outline-primary py-0 px-1"
+                               title="Ver log e detalhes">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            {% if exec.log_texto %}
+                            <a href="/execucao/{{ exec.id }}/download" class="btn btn-sm btn-outline-secondary py-0 px-1"
+                               title="Baixar log">
+                                <i class="bi bi-download"></i>
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if not execucoes %}
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-inbox display-4"></i>
+            <p class="mt-2">Nenhuma extração no histórico</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

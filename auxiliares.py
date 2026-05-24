@@ -5,6 +5,7 @@ Todas as funções de suporte
 import os
 import sys
 import time
+from pathlib import Path
 import pyodbc
 import glob
 import shutil
@@ -22,15 +23,20 @@ import pdfplumber
 from dotenv import load_dotenv
 import json
 from fuzzywuzzy import fuzz
+from rich.console import Console
 
 # Carrega as variáveis do arquivo .env
 load_dotenv()
+
+console = Console(force_terminal=True, color_system="truecolor")
 
 
 # Constantes para SetThreadExecutionState
 ES_CONTINUOUS = 0x80000000
 ES_SYSTEM_REQUIRED = 0x00000001
 ES_DISPLAY_REQUIRED = 0x00000002
+# Constantes para bloqueio de tela
+SPI_SETSCREENSAVERRUNNING = 0x0061
 
 caminho = ''
 
@@ -85,6 +91,12 @@ class Banco:
 
     def consultar(self, sql):
         self.abrirconexao()
+
+        # Verifica se a conexão foi estabelecida
+        if self.cursor is None:
+            erro_msg = self.erro if self.erro else "Falha ao conectar ao banco de dados"
+            raise Exception(f"❌ Erro de conexão com o banco: {erro_msg}")
+
         self.cursor.execute(sql)
         resultado = self.cursor.fetchall()
         resultado = [
@@ -760,6 +772,7 @@ def extrairtextopdf(caminho, tipos):
             df['Parcela'] = listalimpa
 
         case 'NADA CONSTA':
+            texto = textooriginal
             lista = re.findall(r'INSCRIÇÃO: ([\d]{1}.[\d]{3}.[\d]{3}-[\d]{1})', texto)
             listalimpa = [f"'{item.strip()}'" for item in lista]
             df = pd.DataFrame(listalimpa, columns=['Inscricao'])
@@ -773,8 +786,11 @@ def extrairtextopdf(caminho, tipos):
             listalimpa = [f"'{item.strip()}'" for item in lista]
             df['Vencimentos'] = listalimpa
 
-            lista = re.search(r'[\d].[\d]{3}.[\d]{3}-[\d] [\d]{2}([\d\D]*)\n', texto)
-            df['Contribuinte'] = "'" + lista.group(1) + "'"
+            lista = re.search(r'[\d].[\d]{3}.[\d]{3}-[\d] [\d]{2}([^\n]*)\n', texto)
+            if lista:
+                df['Contribuinte'] = "'" + lista.group(1).strip() + "'"
+            else:
+                df['Contribuinte'] = "''"
 
             lista = re.findall(r'([\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d] [\d]{11}.[\d])', texto)
             if not lista:
@@ -802,7 +818,6 @@ def extrairtextopdf(caminho, tipos):
 
                 # Extrair a data limite a partir do campo "Data"
                 data_limite = extrair_data_limite(pagina)
-                print(f"Data limite encontrada: {data_limite}")
 
                 quadro1 = extrair_conteudo_entre_quadros(
                     pagina,
@@ -821,7 +836,8 @@ def extrairtextopdf(caminho, tipos):
                     if len(quadro1)>0:
                         return {
                             "Arquivo": caminho.split('/')[-1],
-                            "Possui_Divida": True
+                            "Possui_Divida": True,
+                            "Data_Limite": data_limite
                         }
                 else:
                     quadro1 = extrair_conteudo_entre_quadros(
@@ -841,7 +857,8 @@ def extrairtextopdf(caminho, tipos):
                         if len(quadro1) > 0:
                             return {
                                 "Arquivo": caminho.split('/')[-1],
-                                "Possui_Divida": True
+                                "Possui_Divida": True,
+                                "Data_Limite": data_limite
                             }
 
                 # Extrair todos os QUADRO II
@@ -865,12 +882,14 @@ def extrairtextopdf(caminho, tipos):
                     if len(datasvencidas) > 0:
                         return {
                             "Arquivo": caminho.split('/')[-1],
-                            "Possui_Divida": True
+                            "Possui_Divida": True,
+                            "Data_Limite": data_limite
                         }
 
                 return {
                     "Arquivo": caminho.split('/')[-1],
-                    "Possui_Divida": False
+                    "Possui_Divida": False,
+                    "Data_Limite": data_limite
                 }
     return df
 
@@ -967,7 +986,136 @@ def adicionarcabecalhopdf(arquivo, arquivodestino, cabecalho, centralizado=False
                 dadosboleto = boletos.barcodereader(arquivodestino)
                 if dadosboleto is not None:
                     return dadosboleto
+    return None
 
+
+def adicionarcabecalhopdf_topo_adaptativo(pdf_entrada, pdf_saida, codigo, senha_base=None, margem=5):
+    """
+    Adiciona cabeçalho testando 3 tipos de acesso:
+    1. Sem senha
+    2. Senha de 5 dígitos (conforme fornecida)
+    3. Senha de 3 dígitos (extraída da base)
+    """
+    from pypdf import PdfReader, PdfWriter
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.colors import Color
+    import io
+    import os
+    import tempfile
+    import shutil
+
+    # ----- ANALISADOR DE ESPAÇO NO TOPO -----
+    def _verificar_texto_topo(page):
+        try:
+            texto_completo = page.extract_text() or ""
+            linhas = texto_completo.split('\n')[:5]
+            ocupacao = {'esquerda': False, 'centro': False, 'direita': False}
+            for linha in linhas:
+                t = linha.strip()
+                if len(t) < 3: continue
+                if len(t) > 60:
+                    return {'esquerda': True, 'centro': True, 'direita': True}
+                elif len(t) > 20:
+                    ocupacao['esquerda'], ocupacao['centro'] = True, True
+                else:
+                    ocupacao['esquerda'] = True
+            return ocupacao
+        except:
+            return {'esquerda': True, 'centro': True, 'direita': True}
+
+    # ===== PASSO 1: DESBLOQUEIO INTELIGENTE =====
+    reader = PdfReader(pdf_entrada)
+
+    if reader.is_encrypted:
+        # Monta a lista de tentativas: Vazia -> 5 dígitos -> 3 dígitos
+        tentativas = [""]
+        if senha_base:
+            senha_str = str(senha_base)
+            tentativas.append(senha_str)  # Tenta os 5 dígitos
+            tentativas.append(senha_str[:3])  # Tenta os 3 primeiros
+
+        sucesso = False
+        for senha_teste in tentativas:
+            try:
+                # O método decrypt retorna 0 (falha), 1 (user) ou 2 (owner)
+                if reader.decrypt(senha_teste) > 0:
+                    sucesso = True
+                    # print(f"  ✅ Desbloqueado com: '{senha_teste}'")
+                    break
+            except Exception:
+                continue
+
+        if not sucesso:
+            raise Exception(f"Não foi possível abrir o PDF. Testadas: sem senha, 5 dígitos e 3 dígitos.")
+
+    # ===== PASSO 2: PROCESSAMENTO DO CONTEÚDO =====
+    temp_fd, temp_path = tempfile.mkstemp(suffix='.pdf')
+    os.close(temp_fd)
+
+    try:
+        writer = PdfWriter()
+
+        for page_num, page in enumerate(reader.pages):
+            width = float(page.mediabox.width)
+            height = float(page.mediabox.height)
+            ocupacao = _verificar_texto_topo(page)
+
+            # Definição de posições candidatas
+            candidatas = [
+                (0.02, height - 20, 'left', 'esquerda'),
+                (0.50, height - 20, 'center', 'centro'),
+                (0.98, height - 20, 'right', 'direita'),
+            ]
+
+            melhor = None
+            menor_conflito = float('inf')
+
+            for x_pct, y, align, regiao in candidatas:
+                x = width * x_pct
+                conflito = 10 if ocupacao[regiao] else 0
+                conflito += {'centro': 0, 'esquerda': 1, 'direita': 2}[regiao]
+
+                if conflito < menor_conflito:
+                    menor_conflito = conflito
+                    melhor = (x, y, align)
+
+            x, y, align = melhor
+
+            # --- Criação do Overlay ---
+            packet = io.BytesIO()
+            can = canvas.Canvas(packet, pagesize=(width, height))
+            txt = f"Código: {codigo}"
+            can.setFont("Helvetica-Bold", 10)
+            tw = can.stringWidth(txt, "Helvetica-Bold", 10)
+
+            # Lógica de Margem Adaptativa (Margem 3 ou 5 aplicada aqui)
+            if align == 'left':
+                text_x, bg_x = x + margem, x
+            elif align == 'right':
+                text_x, bg_x = x - tw - margem, x - tw - (margem * 2)
+            else:
+                text_x, bg_x = x - tw / 2, x - tw / 2 - margem
+
+            can.setFillColor(Color(1, 1, 1, alpha=0.9))
+            can.setStrokeColorRGB(0.3, 0.3, 0.3)
+            can.rect(bg_x, y - 14, tw + (margem * 2), 20, fill=1, stroke=1)
+            can.setFillColorRGB(0, 0, 0)
+            can.drawString(text_x, y - 9, txt)
+            can.save()
+
+            packet.seek(0)
+            overlay = PdfReader(packet)
+            page.merge_page(overlay.pages[0])
+            writer.add_page(page)
+
+        # Salva o arquivo (Writer gera um PDF sem criptografia)
+        with open(temp_path, 'wb') as f:
+            writer.write(f)
+        shutil.move(temp_path, pdf_saida)
+
+    except Exception as e:
+        if os.path.exists(temp_path): os.remove(temp_path)
+        raise e
 
 def removersenhapdf(arquivobloqueado):
     import pikepdf
@@ -1073,9 +1221,10 @@ def retornarlistaboletos(listaadministradora=None, anomes=''):
             string_nomes_administradoras = ', '.join(["'{}'".format(item) for item in listaadministradora])
             sql = (senha.SQLCONDOMINIOS + ' WHERE TRIM(Tabela.NomeAdm) in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
         else:
-            # Carregar do .env se nenhuma lista for fornecida
+            # Carregar do .env — usa API list (inclui URLs migradas) com fallback
+            _lista_env = carregar_lista_administradoras_api()
             string_nomes_administradoras = ', '.join(
-                ["'{}'".format(item['nomereal']) for item in carregar_lista_administradoras()]
+                ["'{}'".format(item['nomereal']) for item in _lista_env]
             )
             sql = (senha.SQLCONDOMINIOS + ' WHERE TRIM(Tabela.NomeAdm) in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
     else:
@@ -1084,9 +1233,10 @@ def retornarlistaboletos(listaadministradora=None, anomes=''):
             string_nomes_administradoras = ', '.join(["'{}'".format(item) for item in listaadministradora])
             sql = (senha.SQLCONDOMINIOS + ' AND TRIM(Tabela.NomeAdm) in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
         else:
-            # Carregar do .env se nenhuma lista for fornecida
+            # Carregar do .env — usa API list (inclui URLs migradas) com fallback
+            _lista_env = carregar_lista_administradoras_api()
             string_nomes_administradoras = ', '.join(
-                ["'{}'".format(item['nomereal']) for item in carregar_lista_administradoras()]
+                ["'{}'".format(item['nomereal']) for item in _lista_env]
             )
             sql = (senha.SQLCONDOMINIOS + ' AND TRIM(Tabela.NomeAdm) in (%s) ORDER BY Codigo;' % string_nomes_administradoras)
 
@@ -1190,18 +1340,30 @@ def get_files_not_in_list(list_of_files, directory_path):
 
 def prevent_sleep():
     # Impede o sistema de entrar em suspensão ou desligar a tela
-    ctypes.windll.kernel32.SetThreadExecutionState(
-        ES_CONTINUOUS |
-        ES_SYSTEM_REQUIRED |
-        ES_DISPLAY_REQUIRED
-    )
+    # ctypes.windll.kernel32.SetThreadExecutionState(
+    #     ES_CONTINUOUS |
+    #     ES_SYSTEM_REQUIRED |
+    #     ES_DISPLAY_REQUIRED
+    # )
+    """
+        1. Impede o PC de dormir (CPU ativa).
+        2. Tenta informar ao Windows que uma aplicação de tela cheia está rodando,
+           o que muitas vezes inibe o bloqueio automático sem impedir o monitor de apagar.
+        """
+    # Mantém o sistema (CPU) acordado, mas permite monitor desligar
+    ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001)
 
+    # Informa ao Windows que o protetor de tela/bloqueio não deve agir agora
+    ctypes.windll.user32.SystemParametersInfoW(SPI_SETSCREENSAVERRUNNING, True, None, 0)
 
 def allow_sleep():
-    # Permite que o sistema entre em suspensão novamente
-    ctypes.windll.kernel32.SetThreadExecutionState(
-        ES_CONTINUOUS
-    )
+    """
+        Restaura os padrões do Windows.
+        """
+    ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)
+
+    # Devolve ao Windows o controle do protetor de tela/bloqueio
+    ctypes.windll.user32.SystemParametersInfoW(SPI_SETSCREENSAVERRUNNING, False, None, 0)
 
 def is_valid_file_in_path(file_name, path):
     for root, _, files in os.walk(path):
@@ -1360,6 +1522,20 @@ def carregar_lista_administradoras():
         raise ValueError("O conteúdo de LISTAADMINISTRADORA no .env não está em formato JSON válido.")
 
 
+def carregar_lista_administradoras_api():
+    """
+    Carrega LISTAADMINISTRADORA_API do .env (URLs migradas pro Superlógica).
+    Fallback pra LISTAADMINISTRADORA se não existir.
+    """
+    lista_str = os.getenv("LISTAADMINISTRADORA_API")
+    if not lista_str:
+        return carregar_lista_administradoras()
+    try:
+        return json.loads(lista_str)
+    except json.JSONDecodeError:
+        return carregar_lista_administradoras()
+
+
 def carregar_lista_multiplas():
     """
     Carrega a LISTAMULTIPLAS do .env como uma lista de dicionários.
@@ -1433,3 +1609,70 @@ def busca_fuzzy(lista_textos, texto_buscado, corte=70):
         if max_index is not None:
             print(f"Melhor correspondência do item {texto_buscado}: '{lista_textos[max_index]}' com {max_ratio}%")
         return None
+
+
+# def extrai_info_boleto(linha_digitavel):
+#     """
+#     Sua função já existente (com janela de validade).
+#     Retorna: (valor, data_vencimento_str)
+#     """
+#     import datetime
+#
+#     fator_vencimento = int(linha_digitavel[40:44])
+#     valor_documento = float(linha_digitavel[46:]) / 100
+#
+#     DATA_BASE_BC = datetime.date(1997, 10, 7)
+#     DATA_REINICIO = datetime.date(2025, 2, 22)
+#     hoje = datetime.date.today()
+#
+#     ANOS_PASSADO_MAX = 5
+#     ANOS_FUTURO_MAX = 1
+#
+#     janela_inicio = hoje - datetime.timedelta(days=ANOS_PASSADO_MAX * 365)
+#     janela_fim = hoje + datetime.timedelta(days=ANOS_FUTURO_MAX * 365)
+#
+#     if not (0 <= fator_vencimento <= 9999):
+#         raise ValueError(f"Fator inválido: {fator_vencimento}")
+#
+#     candidatos = []
+#
+#     # 1️⃣ Ciclo antigo
+#     data_antigo = DATA_BASE_BC + datetime.timedelta(days=fator_vencimento)
+#     candidatos.append({
+#         "nome": "Ciclo antigo (1997)",
+#         "data": data_antigo,
+#         "diff": abs((data_antigo - hoje).days),
+#         "na_janela": janela_inicio <= data_antigo <= janela_fim
+#     })
+#
+#     # 2️⃣ Ciclo novo - padrão
+#     if fator_vencimento >= 1000:
+#         data_novo_padrao = DATA_REINICIO + datetime.timedelta(days=fator_vencimento - 1000)
+#         candidatos.append({
+#             "nome": "Novo padrão (1000)",
+#             "data": data_novo_padrao,
+#             "diff": abs((data_novo_padrao - hoje).days),
+#             "na_janela": janela_inicio <= data_novo_padrao <= janela_fim
+#         })
+#
+#     # 3️⃣ Ciclo novo - erro
+#     data_novo_erro = DATA_REINICIO + datetime.timedelta(days=fator_vencimento)
+#     candidatos.append({
+#         "nome": "Novo erro (0000)",
+#         "data": data_novo_erro,
+#         "diff": abs((data_novo_erro - hoje).days),
+#         "na_janela": janela_inicio <= data_novo_erro <= janela_fim
+#     })
+#
+#     validos = [c for c in candidatos if c["na_janela"]]
+#
+#     if validos:
+#         validos.sort(key=lambda x: x["diff"])
+#         escolhido = validos[0]
+#     else:
+#         candidatos.sort(key=lambda x: x["diff"])
+#         escolhido = candidatos[0]
+#
+#     return valor_documento, escolhido["data"].strftime("%d/%m/%Y")
+
+

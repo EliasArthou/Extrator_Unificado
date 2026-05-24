@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+{% block title %}Gerenciar Usuários - ExtratorUnificado{% endblock %}
+{% block nav_usuarios %}active{% endblock %}
+{% block page_title %}<i class="bi bi-shield-lock text-warning me-1"></i> Gerenciar Usuários{% endblock %}
+
+{% block head %}
+<style>
+    #tblUsuarios .col-nome      { width: 15%; }
+    #tblUsuarios .col-email     { width: 17%; }
+    #tblUsuarios .col-empresa   { width: 13%; }
+    #tblUsuarios .col-admin     { width: 7%; text-align: center; }
+    #tblUsuarios .col-banco     { width: 8%; text-align: center; }
+    #tblUsuarios .col-local     { width: 7%; text-align: center; }
+    #tblUsuarios .col-limite    { width: 10%; }
+    #tblUsuarios .col-status    { width: 7%; text-align: center; }
+    #tblUsuarios .col-criado    { width: 8%; }
+    #tblUsuarios .col-acoes     { width: 8%; text-align: center; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-lg-9">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-people" style="color: var(--edx-admin-accent);"></i>
+                    <h5 class="mb-0">Usuários Cadastrados</h5>
+                </div>
+                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoUsuario">
+                    <i class="bi bi-plus-lg"></i> Novo Usuário
+                </button>
+            </div>
+
+            {% if erro is defined and erro %}
+            <div class="alert alert-danger m-3 py-2">{{ erro }}</div>
+            {% endif %}
+
+            <!-- Toolbar -->
+            <div class="itbl-toolbar">
+                <div class="input-group itbl-search">
+                    <span class="input-group-text" style="font-size:0.85rem;"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control form-control-sm" id="tblSearch"
+                           placeholder="Buscar por nome, e-mail ou empresa...">
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-sm btn-outline-secondary" id="btnLimparFiltros" title="Limpar todos os filtros" style="display:none;">
+                        <i class="bi bi-x-lg"></i> Limpar
+                    </button>
+                    <span class="itbl-count" id="tblCount"></span>
+                </div>
+            </div>
+
+            <div class="itbl-wrap">
+                <table class="itbl" id="tblUsuarios"
+                       data-itbl-search="#tblSearch"
+                       data-itbl-count="#tblCount"
+                       data-itbl-clear="#btnLimparFiltros"
+                       data-itbl-label="usuário|usuários">
+                    <thead>
+                        <tr>
+                            <th class="col-nome" data-col="0" data-filter-type="text">
+                                <span class="th-label">Nome <i class="bi bi-funnel col-icon"></i></span>
+                                <span class="resize-handle"></span>
+                            </th>
+                            <th class="col-email" data-col="1" data-filter-type="text">
+                                <span class="th-label">E-mail <i class="bi bi-funnel col-icon"></i></span>
+                                <span class="resize-handle"></span>
+                            </th>
+                            <th class="col-empresa" data-col="2" data-filter-type="check"
+                                data-filter-options='["Global","{% for emp in empresas %}{{ emp.nome }}{% if not loop.last %}","{% endif %}{% endfor %}","Nenhuma"]'>
+                                <span class="th-label">Empresa <i class="bi bi-funnel col-icon"></i></span>
+                                <span class="resize-handle"></span>
+                            </th>
+                            <th class="col-admin" data-col="3" data-filter-type="check"
+                                data-filter-options='["Admin","—"]'>
+                                <span class="th-label">Admin <i class="bi bi-funnel col-icon"></i></span>
+                                <span class="resize-handle"></span>
+                            </th>
+                            <th class="col-banco" data-col="4" data-filter-type="check"
+                                data-filter-options='["Sim","Não"]' data-use-filter-value="1">
+                                <span class="th-label">Banco <i class="bi bi-funnel col-icon"></i></span>
+                                <span class="resize-handle"></span>
+                            </th>
+                            <th class="col-local" data-col="5" data-filter-type="check"
+                                data-filter-options='["Sim","Não"]' data-use-filter-value="1">
+                                <span class="th-label">Local <i class="bi bi-funnel col-icon"></i></span>
+                                <span class="resize-handle"></span>
+                            </th>
+                            <th class="col-limite" data-col="6">
+                                <span class="th-label">Limite/dia <i class="bi bi-funnel col-icon"></i></span>
+                                <span class="resize-handle"></span>
+                            </th>
+                            <th class="col-status" data-col="7" data-filter-type="check"
+                                data-filter-options='["Ativo","Inativo"]'>
+                                <span class="th-label">Status <i class="bi bi-funnel col-icon"></i></span>
+                                <span class="resize-handle"></span>
+                            </th>
+                            <th class="col-criado" data-col="8">
+                                <span class="th-label">Criado <i class="bi bi-funnel col-icon"></i></span>
+                                <span class="resize-handle"></span>
+                            </th>
+                            <th class="col-acoes">
+                                <span class="th-label" style="cursor:default;">Ações</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for u in usuarios %}
+                        <tr class="{{ 'row-inactive' if not u.ativo else '' }}"
+                            data-search="{{ u.nome|lower }} {{ u.email|lower }} {{ u.empresa.nome|lower if u.empresa else '' }}">
+                            <td>{{ u.nome }}</td>
+                            <td class="cell-muted">{{ u.email }}</td>
+                            <td data-filter-value="{{ 'Global' if u.is_admin else (u.empresa.nome if u.empresa else 'Nenhuma') }}" data-sort-value="{{ 'Global' if u.is_admin else (u.empresa.nome if u.empresa else 'Nenhuma') }}">
+                                {% if u.is_admin %}
+                                <span class="badge bg-secondary" title="Admin global — acessa todas">Global</span>
+                                {% else %}
+                                <form method="POST" action="/admin/usuarios/{{ u.id }}/empresa" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <select name="empresa_id" class="form-select form-select-sm" style="width:auto;min-width:110px;font-size:0.8rem;"
+                                            onchange="this.form.submit()">
+                                        <option value="0">— Nenhuma —</option>
+                                        {% for emp in empresas %}
+                                        <option value="{{ emp.id }}" {{ 'selected' if u.empresa_id == emp.id else '' }}>{{ emp.nome }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </form>
+                                {% endif %}
+                            </td>
+                            <td class="text-center" data-filter-value="{{ 'Admin' if u.is_admin else '—' }}" data-sort-value="{{ 'Admin' if u.is_admin else '—' }}">
+                                {% if u.id == usuario.id %}
+                                <span class="badge bg-warning text-dark" title="Você não pode remover seu próprio admin">Admin</span>
+                                {% else %}
+                                <form method="POST" action="/admin/usuarios/{{ u.id }}/toggle-admin" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <button type="submit" class="btn btn-sm {{ 'btn-warning' if u.is_admin else 'btn-outline-secondary' }}"
+                                            title="{{ 'Remover admin' if u.is_admin else 'Tornar admin' }}">
+                                        <i class="bi {{ 'bi-shield-check' if u.is_admin else 'bi-shield' }}"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </td>
+                            <td class="text-center" data-filter-value="{{ 'Sim' if (u.is_admin or u.pode_upload_banco) else 'Não' }}" data-sort-value="{{ 'Sim' if (u.is_admin or u.pode_upload_banco) else 'Não' }}">
+                                {% if u.is_admin %}
+                                <span class="badge bg-secondary" title="Admins sempre têm acesso">Sim</span>
+                                {% else %}
+                                <form method="POST" action="/admin/usuarios/{{ u.id }}/toggle-banco" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <button type="submit" class="btn btn-sm {{ 'btn-success' if u.pode_upload_banco else 'btn-outline-secondary' }}"
+                                            title="{{ 'Revogar acesso ao banco' if u.pode_upload_banco else 'Permitir upload de banco' }}">
+                                        <i class="bi {{ 'bi-database-check' if u.pode_upload_banco else 'bi-database' }}"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </td>
+                            <td class="text-center" data-filter-value="{{ 'Sim' if u.somente_local else 'Não' }}" data-sort-value="{{ 'Sim' if u.somente_local else 'Não' }}">
+                                {% if u.id == usuario.id %}
+                                <span style="color:var(--edx-text-muted);">—</span>
+                                {% else %}
+                                <form method="POST" action="/admin/usuarios/{{ u.id }}/toggle-local" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <button type="submit" class="btn btn-sm {{ 'btn-warning' if u.somente_local else 'btn-outline-secondary' }}"
+                                            title="{{ 'Remover restrição localhost' if u.somente_local else 'Restringir a localhost' }}">
+                                        <i class="bi {{ 'bi-house-lock-fill' if u.somente_local else 'bi-globe' }}"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </td>
+                            <td data-sort-value="{{ u.limite_diario }}" data-filter-value="{{ u.limite_diario }}">
+                                <form method="POST" action="/admin/usuarios/{{ u.id }}/limite"
+                                      class="d-inline-flex align-items-center gap-1">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <input type="number" name="limite_diario" value="{{ u.limite_diario }}"
+                                           class="form-control form-control-sm" style="width:65px" min="0">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary" title="Salvar">
+                                        <i class="bi bi-check"></i>
+                                    </button>
+                                </form>
+                            </td>
+                            <td class="text-center" data-filter-value="{{ 'Ativo' if u.ativo else 'Inativo' }}" data-sort-value="{{ 'Ativo' if u.ativo else 'Inativo' }}">
+                                {% if u.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td class="cell-muted cell-small" data-sort-value="{{ u.criado_em.strftime('%Y-%m-%d') if u.criado_em else '' }}">{{ u.criado_em.strftime('%d/%m/%Y') if u.criado_em else '-' }}</td>
+                            <td class="text-center">
+                                {% if u.id != usuario.id %}
+                                <div class="d-flex gap-1 justify-content-center">
+                                    <form method="POST" action="/admin/usuarios/{{ u.id }}/toggle" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <button type="submit" class="btn btn-sm {{ 'btn-outline-danger' if u.ativo else 'btn-outline-success' }}"
+                                                title="{{ 'Desativar' if u.ativo else 'Ativar' }}">
+                                            <i class="bi {{ 'bi-person-x' if u.ativo else 'bi-person-check' }}"></i>
+                                        </button>
+                                    </form>
+                                    <form method="POST" action="/admin/usuarios/{{ u.id }}/excluir" class="d-inline"
+                                          onsubmit="return confirm('Excluir {{ u.nome }}? O usuário será removido da lista.')">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if not usuarios %}
+            <div class="text-center text-muted py-4">
+                <i class="bi bi-people display-6"></i>
+                <p class="mt-2 small">Nenhum usuário cadastrado</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Card resumo lateral -->
+    <div class="col-lg-3">
+        <div class="card">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-info-circle display-6" style="color: var(--edx-accent);"></i>
+                <p class="mt-3 small" style="color:var(--edx-text-muted);">
+                    Gerencie os usuários que podem acessar o sistema.
+                    Vincule cada usuário a uma empresa para compartilhar o limite diário dela.
+                </p>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-body py-3">
+                <h6 class="fw-bold mb-2" style="color:var(--edx-text);"><i class="bi bi-lightbulb" style="color:var(--edx-warning);"></i> Dicas</h6>
+                <ul class="small mb-0" style="color:var(--edx-text-muted);padding-left:1.2rem;">
+                    <li class="mb-1"><strong>Global</strong> = admin com acesso a todas as empresas</li>
+                    <li class="mb-1"><strong>Empresa</strong> = usuário vinculado, compartilha o limite da empresa</li>
+                    <li class="mb-1"><strong>Só Local</strong> = só pode acessar via localhost</li>
+                    <li class="mb-1"><strong>Banco</strong> = permissão de upload de arquivo .WMB</li>
+                    <li>Clique no cabeçalho para <strong>ordenar e filtrar</strong>. Arraste a borda para <strong>redimensionar</strong>.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Novo Usuário -->
+<div class="modal fade" id="modalNovoUsuario" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="/admin/usuarios/criar">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-person-plus"></i> Novo Usuário</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nome</label>
+                        <input type="text" class="form-control" name="nome" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">E-mail</label>
+                        <input type="email" class="form-control" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Senha</label>
+                        <input type="password" class="form-control" name="senha" required minlength="8"
+                               pattern=".{8,}" title="Mínimo 8 caracteres">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Empresa</label>
+                        <select class="form-select" name="empresa_id">
+                            <option value="0">— Nenhuma (admin global) —</option>
+                            {% for emp in empresas %}
+                            <option value="{{ emp.id }}">{{ emp.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <label class="form-label">Limite diário</label>
+                            <input type="number" class="form-control" name="limite_diario" value="200" min="0">
+                        </div>
+                        <div class="col-6 d-flex flex-column justify-content-end gap-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="is_admin" id="isAdmin">
+                                <label class="form-check-label" for="isAdmin">Administrador</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="pode_upload_banco" id="podeUploadBanco">
+                                <label class="form-check-label" for="podeUploadBanco">Upload de banco (.WMB)</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="somente_local" id="somenteLocal">
+                                <label class="form-check-label" for="somenteLocal">Somente localhost</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Criar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- itbl.js carregado no base.html cuida de tudo -->
+{% endblock %}

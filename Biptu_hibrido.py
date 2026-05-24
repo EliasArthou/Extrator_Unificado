@@ -14,6 +14,7 @@ import base64
 import requests
 import pandas as pd
 import auxiliares as aux
+import aux_patches  # registra adicionarcabecalhopdf_topo_adaptativo em aux
 from datetime import date, datetime
 from bs4 import BeautifulSoup
 from anticaptchaofficial.imagecaptcha import imagecaptcha
@@ -39,6 +40,17 @@ console = Console(force_terminal=True, color_system="truecolor")
 
 import threading
 _print_lock = threading.Lock()
+
+
+
+def _esta_visivel(loc, timeout_ms: int = 2000) -> bool:
+    """Compat com Playwright >= 1.40: is_visible() não aceita mais timeout=.
+    Substituto: wait_for(state='visible', timeout=N) dentro de try/except."""
+    try:
+        loc.wait_for(state='visible', timeout=timeout_ms)
+        return True
+    except Exception:
+        return False
 
 
 def _flush_log(log: list[str]):
@@ -81,7 +93,7 @@ def _navegar_ate_dados(page: Page, nriptu: str) -> tuple[bool, str]:
             # Sempre navega de volta se o input não está visível
             # (a URL é a mesma para tela inicial e tela de dados)
             input_insc = page.locator("#ctl00_ePortalContent_inscricao_input")
-            if not input_insc.is_visible(timeout=2000):
+            if not _esta_visivel(input_insc, 2000):
                 page.goto(os.getenv('SITEIPTU'), wait_until="networkidle", timeout=60000)
 
             page.wait_for_load_state("networkidle")
@@ -97,7 +109,7 @@ def _navegar_ate_dados(page: Page, nriptu: str) -> tuple[bool, str]:
                 pass
 
             msg = page.locator("#ctl00_ePortalContent_MSG")
-            if msg.is_visible(timeout=2000):
+            if _esta_visivel(msg, 2000):
                 txt = msg.inner_text().strip()
                 if ERRO_SESSAO in txt:
                     page.goto(os.getenv('SITEIPTU'), wait_until="networkidle", timeout=30000)
@@ -439,7 +451,7 @@ def _navegar_nadaconsta(page: Page, nriptu: str) -> tuple[bool, str, str]:
             # Verifica se é erro
             msg_el = page.locator("#MSG")
             try:
-                if msg_el.is_visible(timeout=1000):
+                if _esta_visivel(msg_el, 1000):
                     txt = page.locator("#MSGText").inner_text(timeout=1000).strip()
                     if txt:
                         return False, txt, anoextracao

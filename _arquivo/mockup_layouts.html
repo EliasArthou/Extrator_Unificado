@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ExtratorUnificado - Layout Mockups</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #1e3a5f;
+            margin-bottom: 50px;
+            font-size: 2.5em;
+            font-weight: 300;
+            letter-spacing: 1px;
+        }
+
+        .mockups-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(650px, 1fr));
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        .mockup-wrapper {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .mockup-wrapper:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
+        }
+
+        .mockup-title {
+            font-size: 1.5em;
+            font-weight: 600;
+            color: #1e3a5f;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #2563eb;
+        }
+
+        .mockup-frame {
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #f9fafb;
+            height: 600px;
+            display: flex;
+            position: relative;
+        }
+
+        /* ===== LAYOUT 1: SIDEBAR FIXO ===== */
+        .mockup-1 {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        .sidebar-1 {
+            width: 220px;
+            background: linear-gradient(180deg, #1e3a5f 0%, #2d5a8c 100%);
+            padding: 20px 15px;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .sidebar-1 .logo {
+            font-size: 0.9em;
+            font-weight: 700;
+            margin-bottom: 30px;
+            padding: 10px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+            text-align: center;
+            letter-spacing: 0.5px;
+        }
+
+        .sidebar-1 .nav-links {
+            list-style: none;
+        }
+
+        .sidebar-1 .nav-links li {
+            margin-bottom: 12px;
+        }
+
+        .sidebar-1 .nav-links a {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            display: block;
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-size: 0.95em;
+            transition: all 0.2s;
+        }
+
+        .sidebar-1 .nav-links a:hover,
+        .sidebar-1 .nav-links a.active {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            padding-left: 16px;
+        }
+
+        .sidebar-1 .nav-links a.sair {
+            margin-top: 30px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 20px;
+        }
+
+        .content-area-1 {
+            flex: 1;
+            padding: 25px;
+            overflow-y: auto;
+        }
+
+        .dashboard-header {
+            margin-bottom: 25px;
+        }
+
+        .dashboard-header h2 {
+            color: #1e3a5f;
+            font-size: 1.8em;
+            margin-bottom: 5px;
+        }
+
+        .dashboard-header p {
+            color: #6b7280;
+            font-size: 0.95em;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 18px;
+            border-radius: 8px;
+            border-left: 4px solid #2563eb;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .stat-card-label {
+            font-size: 0.85em;
+            color: #6b7280;
+            margin-bottom: 5px;
+        }
+
+        .stat-card-value {
+            font-size: 1.8em;
+            font-weight: 700;
+            color: #1e3a5f;
+        }
+
+        .table-preview {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            font-size: 0.85em;
+        }
+
+        .table-preview thead {
+            background: #f3f4f6;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .table-preview th {
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #1e3a5f;
+        }
+
+        .table-preview td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e5e7eb;
+            color: #374151;
+        }
+
+        .table-preview tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* ===== LAYOUT 2: NAVBAR TOP ===== */
+        .mockup-2 {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+        }
+
+        .navbar-top {
+            background: linear-gradient(90deg, #1e3a5f 0%, #2d5a8c 100%);
+            padding: 15px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .navbar-top .logo {
+            font-weight: 700;
+            font-size: 1.1em;
+            letter-spacing: 0.5px;
+        }
+
+        .navbar-top .nav-menu {
+            display: flex;
+            list-style: none;
+            gap: 25px;
+            align-items: center;
+        }
+
+        .navbar-top .nav-menu a {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            font-size: 0.95em;
+            transition: color 0.2s;
+        }
+
+        .navbar-top .nav-menu a:hover,
+        .navbar-top .nav-menu a.active {
+            color: white;
+            border-bottom: 2px solid #60a5fa;
+            padding-bottom: 3px;
+        }
+
+        .navbar-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .navbar-dropdown-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.95em;
+            transition: background 0.2s;
+        }
+
+        .navbar-dropdown-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .navbar-dropdown-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: white;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            min-width: 150px;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .navbar-dropdown:hover .navbar-dropdown-menu {
+            display: block;
+        }
+
+        .navbar-dropdown-menu a {
+            display: block;
+            color: #1e3a5f;
+            padding: 10px 15px;
+            text-decoration: none;
+            font-size: 0.9em;
+            border-bottom: 1px solid #f3f4f6;
+            transition: background 0.2s;
+        }
+
+        .navbar-dropdown-menu a:last-child {
+            border-bottom: none;
+        }
+
+        .navbar-dropdown-menu a:hover {
+            background: #f3f4f6;
+        }
+
+        .content-area-2 {
+            flex: 1;
+            padding: 25px;
+            overflow-y: auto;
+        }
+
+        /* ===== LAYOUT 3: SIDEBAR COLAPSÁVEL ===== */
+        .mockup-3 {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        .sidebar-3-expanded,
+        .sidebar-3-collapsed {
+            background: linear-gradient(180deg, #1e3a5f 0%, #2d5a8c 100%);
+            color: white;
+            padding: 20px 15px;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        .sidebar-3-expanded {
+            width: 220px;
+        }
+
+        .sidebar-3-collapsed {
+            width: 60px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .sidebar-3-expanded .logo {
+            font-size: 0.9em;
+            font-weight: 700;
+            margin-bottom: 30px;
+            padding: 10px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+            text-align: center;
+            letter-spacing: 0.5px;
+        }
+
+        .sidebar-3-collapsed .logo {
+            font-size: 0.65em;
+            font-weight: 700;
+            margin-bottom: 20px;
+            padding: 5px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+            text-align: center;
+            letter-spacing: 0.5px;
+            display: none;
+        }
+
+        .hamburger-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            margin-bottom: 20px;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .hamburger-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .sidebar-3-expanded .nav-links,
+        .sidebar-3-collapsed .nav-links {
+            list-style: none;
+        }
+
+        .sidebar-3-expanded .nav-links li {
+            margin-bottom: 12px;
+        }
+
+        .sidebar-3-collapsed .nav-links li {
+            margin-bottom: 15px;
+        }
+
+        .sidebar-3-expanded .nav-links a {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            display: block;
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-size: 0.95em;
+            transition: all 0.2s;
+        }
+
+        .sidebar-3-collapsed .nav-links a {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            font-size: 1.2em;
+            transition: all 0.2s;
+            title: tooltip;
+        }
+
+        .sidebar-3-expanded .nav-links a:hover,
+        .sidebar-3-expanded .nav-links a.active {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            padding-left: 16px;
+        }
+
+        .sidebar-3-collapsed .nav-links a:hover,
+        .sidebar-3-collapsed .nav-links a.active {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+
+        .sidebar-3-expanded .nav-links a.sair {
+            margin-top: 30px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 20px;
+        }
+
+        .sidebar-3-collapsed .nav-links a.sair {
+            margin-top: 30px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 20px;
+        }
+
+        .content-area-3 {
+            flex: 1;
+            padding: 25px;
+            overflow-y: auto;
+        }
+
+        .sidebar-comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .sidebar-state {
+            background: white;
+            border: 2px dashed #e5e7eb;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .sidebar-state-label {
+            font-weight: 600;
+            color: #1e3a5f;
+            margin-bottom: 15px;
+            font-size: 0.95em;
+        }
+
+        .sidebar-state-content {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            font-size: 1.4em;
+        }
+
+        .icon {
+            display: inline-block;
+        }
+
+        @media (max-width: 1400px) {
+            .mockups-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .footer {
+            text-align: center;
+            color: #6b7280;
+            font-size: 0.9em;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid rgba(30, 58, 95, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Escolha o layout da interface</h1>
+
+        <div class="mockups-grid">
+            <!-- MOCKUP 1: SIDEBAR FIXO -->
+            <div class="mockup-wrapper">
+                <div class="mockup-title">1. Sidebar Fixa</div>
+                <div class="mockup-frame">
+                    <div class="mockup-1">
+                        <aside class="sidebar-1">
+                            <div class="logo">ExtratorUnificado</div>
+                            <ul class="nav-links">
+                                <li><a href="#" class="active">📊 Dashboard</a></li>
+                                <li><a href="#">📜 Histórico</a></li>
+                                <li><a href="#">👥 Usuários</a></li>
+                                <li><a href="#">📋 Logs</a></li>
+                                <li><a href="#" class="sair">🚪 Sair</a></li>
+                            </ul>
+                        </aside>
+                        <main class="content-area-1">
+                            <div class="dashboard-header">
+                                <h2>Dashboard</h2>
+                                <p>Bem-vindo ao ExtratorUnificado</p>
+                            </div>
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-card-label">Extrações Hoje</div>
+                                    <div class="stat-card-value">1.247</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-card-label">Taxa Sucesso</div>
+                                    <div class="stat-card-value">98.5%</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-card-label">Usuários Ativos</div>
+                                    <div class="stat-card-value">42</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-card-label">Tempo Médio</div>
+                                    <div class="stat-card-value">2.3s</div>
+                                </div>
+                            </div>
+                            <table class="table-preview">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Tipo</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>#1001</td>
+                                        <td>PDF</td>
+                                        <td>✓ Concluído</td>
+                                    </tr>
+                                    <tr>
+                                        <td>#1000</td>
+                                        <td>JSON</td>
+                                        <td>✓ Concluído</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </main>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MOCKUP 2: NAVBAR TOP -->
+            <div class="mockup-wrapper">
+                <div class="mockup-title">2. Navbar Top</div>
+                <div class="mockup-frame">
+                    <div class="mockup-2">
+                        <nav class="navbar-top">
+                            <div class="logo">ExtratorUnificado</div>
+                            <ul class="nav-menu">
+                                <li><a href="#" class="active">Dashboard</a></li>
+                                <li><a href="#">Histórico</a></li>
+                                <li><a href="#">Usuários</a></li>
+                                <li class="navbar-dropdown">
+                                    <button class="navbar-dropdown-btn">⚙️ Admin</button>
+                                    <div class="navbar-dropdown-menu">
+                                        <a href="#">Configurações</a>
+                                        <a href="#">Logs</a>
+                                        <a href="#">Sair</a>
+                                    </div>
+                                </li>
+                            </ul>
+                        </nav>
+                        <main class="content-area-2">
+                            <div class="dashboard-header">
+                                <h2>Dashboard</h2>
+                                <p>Bem-vindo ao ExtratorUnificado</p>
+                            </div>
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-card-label">Extrações Hoje</div>
+                                    <div class="stat-card-value">1.247</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-card-label">Taxa Sucesso</div>
+                                    <div class="stat-card-value">98.5%</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-card-label">Usuários Ativos</div>
+                                    <div class="stat-card-value">42</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-card-label">Tempo Médio</div>
+                                    <div class="stat-card-value">2.3s</div>
+                                </div>
+                            </div>
+                            <table class="table-preview">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Tipo</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>#1001</td>
+                                        <td>PDF</td>
+                                        <td>✓ Concluído</td>
+                                    </tr>
+                                    <tr>
+                                        <td>#1000</td>
+                                        <td>JSON</td>
+                                        <td>✓ Concluído</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </main>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MOCKUP 3: SIDEBAR COLAPSÁVEL -->
+            <div class="mockup-wrapper">
+                <div class="mockup-title">3. Sidebar Colapsável</div>
+                <div class="mockup-frame">
+                    <div class="mockup-3">
+                        <aside class="sidebar-3-expanded">
+                            <div class="logo">ExtratorUnificado</div>
+                            <button class="hamburger-btn">☰</button>
+                            <ul class="nav-links">
+                                <li><a href="#" class="active" title="Dashboard">📊</a></li>
+                                <li><a href="#" title="Histórico">📜</a></li>
+                                <li><a href="#" title="Usuários">👥</a></li>
+                                <li><a href="#" title="Logs">📋</a></li>
+                                <li><a href="#" class="sair" title="Sair">🚪</a></li>
+                            </ul>
+                        </aside>
+                        <main class="content-area-3">
+                            <div class="dashboard-header">
+                                <h2>Dashboard</h2>
+                                <p>Bem-vindo ao ExtratorUnificado</p>
+                            </div>
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-card-label">Extrações Hoje</div>
+                                    <div class="stat-card-value">1.247</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-card-label">Taxa Sucesso</div>
+                                    <div class="stat-card-value">98.5%</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-card-label">Usuários Ativos</div>
+                                    <div class="stat-card-value">42</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-card-label">Tempo Médio</div>
+                                    <div class="stat-card-value">2.3s</div>
+                                </div>
+                            </div>
+                        </main>
+                    </div>
+                </div>
+
+                <div class="sidebar-comparison">
+                    <div class="sidebar-state">
+                        <div class="sidebar-state-label">Expandido</div>
+                        <div class="sidebar-state-content">
+                            <span class="icon">📊</span>
+                            <span class="icon">📜</span>
+                            <span class="icon">👥</span>
+                        </div>
+                    </div>
+                    <div class="sidebar-state">
+                        <div class="sidebar-state-label">Colapsado</div>
+                        <div class="sidebar-state-content">
+                            <span class="icon">📊</span>
+                            <span class="icon">📜</span>
+                            <span class="icon">👥</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Mockups estáticos para visualizar diferentes opções de layout. Escolha a que melhor se adequa ao seu projeto.</p>
+        </div>
+    </div>
+</body>
+</html>

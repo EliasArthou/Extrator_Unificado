@@ -579,6 +579,27 @@ def main():
                     and 'PAGO' not in v and 'Quitad' not in v):
                 console.print(f"  {reg['Cod Cliente']} | {reg['IPTU']} | {v}")
 
+    # ── 7. Gera XLSX de carga pra [Codigos IPTUs] ──────────────
+    # Chama gerar_excel_carga_iptu.py via subprocess (mantém scripts desacoplados).
+    # Comente este bloco se quiser desabilitar.
+    import subprocess
+    script_carga = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "gerar_excel_carga_iptu.py")
+    if os.path.isfile(script_carga):
+        console.print(f"\n[cyan][CARGA][/] Gerando XLSX consolidado de "
+                      f"{os.path.basename(args.pasta)} pra [Codigos IPTUs]...")
+        try:
+            subprocess.run(
+                [sys.executable, script_carga, "-p", args.pasta],
+                cwd=os.path.dirname(os.path.abspath(__file__)),
+                check=False,
+            )
+        except Exception as e:
+            console.print(f"[yellow][AVISO][/] Falha ao gerar XLSX de carga: {e}")
+    else:
+        console.print(f"[yellow][AVISO][/] gerar_excel_carga_iptu.py nao encontrado, "
+                      f"XLSX de carga nao foi gerado.")
+
 
 if __name__ == "__main__":
     main()

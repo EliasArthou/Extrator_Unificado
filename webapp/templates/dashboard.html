@@ -1,0 +1,451 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - ExtratorUnificado{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Painel de Extração -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="bi bi-play-circle" style="color: var(--edx-accent);"></i>
+                <h5 class="mb-0">Nova Extração</h5>
+            </div>
+            <div class="card-body">
+                <form id="formExtracao">
+                    <input type="hidden" name="csrf_token" id="csrfToken" value="{{ csrf_token }}">
+
+                    <!-- Empresa (admin global) -->
+                    {% if usuario.is_admin %}
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Empresa</label>
+                            <select class="form-select" id="empresaSelect" name="empresa_id">
+                                <option value="">Selecione a empresa...</option>
+                                <!-- Populado via JS -->
+                            </select>
+                            <div class="form-text">
+                                <i class="bi bi-info-circle"></i>
+                                Admin global: selecione a empresa para ver os tipos de extração disponíveis.
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Tipo de Extração (dinâmico) -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Tipo de Extração
+                                <i class="bi bi-info-circle text-muted" style="font-size:0.75rem;cursor:help;"
+                                   data-bs-toggle="tooltip" data-bs-placement="top"
+                                   title="Categoria principal da extração. Cada tipo tem serviços e opções diferentes."></i>
+                            </label>
+                            <select class="form-select" id="tipo" name="tipo" required
+                                    {{ 'disabled' if usuario.is_admin else '' }}>
+                                <option value="">{{ 'Selecione a empresa primeiro...' if usuario.is_admin else 'Carregando...' }}</option>
+                            </select>
+                        </div>
+
+                        <!-- Subtipo (Prefeitura → IPTU / Nada Consta / Certidão) -->
+                        <div class="col-md-6" id="divSubtipo" style="display:none">
+                            <label class="form-label">Serviço
+                                <i class="bi bi-info-circle text-muted" style="font-size:0.75rem;cursor:help;"
+                                   data-bs-toggle="tooltip" data-bs-placement="top"
+                                   title="Tipo de documento a ser extraído no portal da Prefeitura."></i>
+                            </label>
+                            <select class="form-select" id="subtipo" name="subtipo">
+                                <!-- Populado via JS conforme fontes da empresa -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Opções de Pagamento (Prefeitura/Bombeiros) -->
+                    <div id="divPagamento" style="display:none">
+                        <div class="mb-3">
+                            <label class="form-label">Tipo de Pagamento</label>
+                            <div class="btn-group w-100" role="group" id="groupPagamento">
+                                <!-- Preenchido via JS conforme tipo -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Opções IPTU -->
+                    <div id="divOpcoesIPTU" style="display:none">
+                        <div class="row mb-3">
+                            <div class="col-auto" id="divSomenteFaltantes">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="somentefaltantes" name="somente_faltantes" checked>
+                                    <label class="form-check-label" for="somentefaltantes">Somente Faltantes
+                                        <i class="bi bi-info-circle text-muted" style="font-size:0.7rem;cursor:help;"
+                                           data-bs-toggle="tooltip" data-bs-placement="top"
+                                           title="Extrai apenas IPTUs que ainda não foram processados (não constam na tabela de códigos)."></i>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="somenteValores" name="somente_valores">
+                                    <label class="form-check-label" for="somenteValores">Somente Valores
+                                        <i class="bi bi-info-circle text-muted" style="font-size:0.7rem;cursor:help;"
+                                           data-bs-toggle="tooltip" data-bs-placement="top"
+                                           title="Extrai apenas os valores do boleto, sem baixar o PDF completo."></i>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-auto opcao-somente-banco" id="divCodigosBarra">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="codigosBarra" name="codigos_barra">
+                                    <label class="form-check-label" for="codigosBarra">Subir Código de Barras
+                                        <i class="bi bi-info-circle text-muted" style="font-size:0.7rem;cursor:help;"
+                                           data-bs-toggle="tooltip" data-bs-placement="top"
+                                           title="Grava o código de barras do boleto de volta no banco de dados."></i>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Opções Condomínios -->
+                    <div id="divCondominios" style="display:none">
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Mês/Ano dos Boletos</label>
+                                <input type="text" class="form-control" id="dataMes" name="data_mes"
+                                       placeholder="mm/aaaa" maxlength="7">
+                            </div>
+                            <div class="col-md-4 d-flex align-items-end">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="inicioMes" name="inicio_mes">
+                                    <label class="form-check-label" for="inicioMes">Carga de início de mês</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Workers e Delay (somente admin) -->
+                    {% if usuario.is_admin %}
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Workers</label>
+                            <input type="number" class="form-control" id="numWorkers" name="num_workers"
+                                   value="1" min="1" max="8">
+                        </div>
+                        <div class="col-md-3" id="divDelay" style="display:none">
+                            <label class="form-label">Delay (seg)</label>
+                            <input type="number" class="form-control" id="delayIptu" name="delay_iptu"
+                                   value="5" min="0" max="60">
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Fonte de Dados -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Fonte de Dados</label>
+                        {% set pode_banco = usuario.is_admin or usuario.pode_upload_banco %}
+                        {% if pode_banco %}
+                        <ul class="nav nav-tabs" id="tabFonteDados" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="tab-upload" data-bs-toggle="tab"
+                                        data-bs-target="#pane-upload" type="button" role="tab">
+                                    <i class="bi bi-file-earmark-spreadsheet"></i> Upload de Planilha
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="tab-banco" data-bs-toggle="tab"
+                                        data-bs-target="#pane-banco" type="button" role="tab">
+                                    <i class="bi bi-database"></i> Arquivo do Banco
+                                </button>
+                            </li>
+                        </ul>
+                        {% endif %}
+                        <div class="tab-content {{ 'border border-top-0 rounded-bottom' if pode_banco else 'border rounded' }} p-3" id="tabFonteDadosContent">
+                            <!-- Upload Excel/CSV -->
+                            <div class="tab-pane fade show active" id="pane-upload" role="tabpanel">
+                                <div class="row align-items-end">
+                                    <div class="col-md-8">
+                                        <label class="form-label text-muted small">Arquivo Excel (.xlsx) ou CSV</label>
+                                        <input type="file" class="form-control" id="arquivoDados" name="arquivo_dados"
+                                               accept=".xlsx,.xls,.csv">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <a href="#" class="btn btn-outline-secondary w-100 disabled" id="btnTemplate"
+                                           title="Selecione o tipo de extração para baixar o template">
+                                            <i class="bi bi-download"></i> Baixar Template
+                                        </a>
+                                    </div>
+                                </div>
+                                <div class="form-text mt-1" id="templateHint">
+                                    <i class="bi bi-info-circle"></i>
+                                    Selecione o tipo de extração para habilitar o download do template.
+                                </div>
+                            </div>
+                            {% if pode_banco %}
+                            <!-- Banco .WMB (somente admin/autorizado) -->
+                            <div class="tab-pane fade" id="pane-banco" role="tabpanel">
+                                <label class="form-label text-muted small">Arquivo do Banco (.WMB / .mdb / .accdb)</label>
+                                <input type="file" class="form-control" id="arquivoBanco" name="arquivo_banco"
+                                       accept=".wmb,.WMB,.mdb,.MDB,.accdb">
+                                <div class="form-text mt-1">
+                                    <i class="bi bi-exclamation-triangle text-warning"></i>
+                                    Envia o banco completo ao servidor. Prefira o upload de planilha.
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-lg" id="btnExecutar">
+                        <i class="bi bi-play-fill"></i> Executar Extração
+                    </button>
+                </form>
+
+                <!-- Progresso -->
+                <div id="divProgresso" class="mt-4" style="display:none">
+                    <hr>
+                    <h6><i class="bi bi-hourglass-split"></i> Progresso</h6>
+                    <div class="progress mb-2" style="height: 25px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated"
+                             id="barraProgresso" role="progressbar" style="width: 0%">
+                            0%
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between text-muted small">
+                        <span id="lblProgresso">Aguardando...</span>
+                        <span>
+                            <i class="bi bi-stopwatch"></i> <span id="lblTempo">00:00</span>
+                            | ETA: <span id="lblETA">--:--</span>
+                        </span>
+                    </div>
+                    <div id="divLog" class="mt-2 log-panel" style="display:none">
+                        <pre id="logContent" class="mb-0"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Painel Lateral -->
+    <div class="col-lg-4">
+        <!-- Uso do dia -->
+        <div class="card mb-3">
+            <div class="card-body stat-card">
+                <div class="stat-value" style="color: var(--edx-accent);">{{ uso_hoje }}</div>
+                <div class="stat-label">de {{ usuario.limite_diario }} extrações hoje</div>
+                <div class="progress mt-3" style="height: 6px;">
+                    {% set pct = (uso_hoje / usuario.limite_diario * 100) if usuario.limite_diario > 0 else 0 %}
+                    <div class="progress-bar {% if pct > 80 %}bg-danger{% elif pct > 50 %}bg-warning{% endif %}"
+                         style="width: {{ pct }}%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ajuda contextual -->
+        <div class="card mb-3" id="cardAjuda">
+            <div class="card-header d-flex align-items-center gap-2 py-2">
+                <i class="bi bi-question-circle" style="color: var(--edx-accent);"></i>
+                <h6 class="mb-0 small">Ajuda</h6>
+            </div>
+            <div class="card-body py-2" id="ajudaConteudo">
+                <p class="small text-muted mb-0">Selecione o tipo de extração para ver as instruções.</p>
+            </div>
+        </div>
+
+        <!-- Execuções recentes -->
+        <div class="card">
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="bi bi-clock-history" style="color: var(--edx-accent);"></i>
+                <h6 class="mb-0">Recentes</h6>
+            </div>
+            <div class="card-body p-0">
+                {% if execucoes %}
+                <div class="list-group list-group-flush">
+                    {% for exec in execucoes[:8] %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center py-2">
+                        <div>
+                            <span class="fw-bold small">{{ exec.tipo }}</span>
+                            {% if exec.subtipo %}
+                            <span class="text-muted small">/ {{ exec.subtipo }}</span>
+                            {% endif %}
+                            <br>
+                            <span class="text-muted" style="font-size:0.75rem">
+                                {{ exec.iniciado_em.strftime('%d/%m %H:%M') if exec.iniciado_em else '' }}
+                            </span>
+                        </div>
+                        <div class="d-flex align-items-center gap-1">
+                            {% if exec.status == 'concluido' %}
+                            <span class="badge bg-success">
+                                <i class="bi bi-check"></i> {{ exec.registros_ok }}
+                            </span>
+                            {% elif exec.status == 'rodando' %}
+                            <span class="badge bg-primary">
+                                <i class="bi bi-arrow-repeat spin"></i>
+                            </span>
+                            {% if usuario.is_admin %}
+                            <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1 btn-cancelar-exec"
+                                    data-exec-id="{{ exec.id }}" title="Cancelar execução">
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                            {% endif %}
+                            {% elif exec.status == 'erro' %}
+                            <span class="badge bg-danger">
+                                <i class="bi bi-x"></i> Erro
+                            </span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ exec.status }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-inbox display-6"></i>
+                    <p class="mt-2 small">Nenhuma extração realizada</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Config JS: empresa_id do usuário (o backend valida permissões, não o JS) -->
+<script>
+    window.EDX_CONFIG = {
+        empresaId: {{ usuario.empresa_id or 0 }},
+        temSeletorEmpresa: {{ 'true' if usuario.is_admin else 'false' }},
+    };
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/app.js"></script>
+<script>
+// Inicializar tooltips do Bootstrap
+document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+    new bootstrap.Tooltip(el);
+});
+
+// Ajuda contextual — descrições base por tipo
+const AJUDA_BASE = {
+    '': 'Selecione o tipo de extração para ver as instruções.',
+    'Prefeitura': 'Extrações do portal da Prefeitura. Escolha o serviço desejado no segundo campo.',
+    'Prefeitura__IPTU': '<strong>IPTU</strong> — Extrai guias de IPTU do portal da Prefeitura.',
+    'Prefeitura__Nada_Consta': '<strong>Nada Consta</strong> — Extrai certidões de Nada Consta do portal da Prefeitura.<br>' +
+        'Usa reCAPTCHA v3 (requer modo visível do navegador).<br>' +
+        'Entrada: Código do cliente + Inscrição IPTU.',
+    'Prefeitura__Certidao_Negativa': '<strong>Certidão Negativa</strong> — Extrai Certidões Fiscais (Enfitêuticas) por requests.<br>' +
+        'Não requer navegador. Gera PDF da certidão para cada inscrição.',
+    'Bombeiros': '<strong>Bombeiros (CBMERJ)</strong> — Extrai taxas do Corpo de Bombeiros.<br>' +
+        'Entrada: Código, Inscrição CBMERJ, IPTU e Cidade.',
+    'Condominios': '<strong>Condomínios</strong> — Extrai boletos de condomínio das administradoras.',
+};
+
+// Helpers: descrições de campos condicionais (só exibe se visível)
+const AJUDA_CAMPOS = [
+    { el: 'divSubtipo',          texto: '<em>Serviço:</em> tipo de documento a ser extraído no portal.' },
+    { el: 'divPagamento',        texto: '<em>Tipo de Pagamento:</em> seleciona a forma de pagamento (cota única ou parcelado).' },
+    { el: 'divSomenteFaltantes', texto: '<em>Somente Faltantes:</em> processa apenas inscrições que ainda não foram extraídas.' },
+    { el: 'somenteValores',      texto: '<em>Somente Valores:</em> captura apenas os valores, sem baixar PDFs.', parent: 'divOpcoesIPTU' },
+    { el: 'divCodigosBarra',     texto: '<em>Subir Código de Barras:</em> grava o código de barras do boleto de volta no banco de dados.' },
+    { el: 'divCondominios',      texto: '<em>Mês/Ano:</em> período dos boletos a extrair.<br><em>Início de mês:</em> marca como carga inicial (processa todos os condomínios).' },
+    { el: 'numWorkers',          texto: '<em>Workers:</em> número de processos paralelos para acelerar a extração.' },
+    { el: 'divDelay',            texto: '<em>Delay:</em> intervalo entre requisições para evitar bloqueio do portal.' },
+    { el: 'tabFonteDados',       texto: '<em>Fonte de Dados:</em> escolha entre enviar uma planilha Excel/CSV ou o arquivo do banco de dados.', checkFn: () => !!document.getElementById('tabFonteDados') },
+    { el: 'arquivoDados',        texto: '<em>Upload de Planilha:</em> envie um arquivo Excel (.xlsx) ou CSV com os dados. Use o botão "Baixar Template" para obter o modelo correto.', tab: 'upload' },
+    { el: 'arquivoBanco',        texto: '<em>Arquivo do Banco:</em> envia o banco completo (.WMB/.mdb/.accdb) ao servidor. Os dados serão extraídos automaticamente via SQL.', tab: 'banco' },
+];
+
+function elementoVisivel(id) {
+    const el = document.getElementById(id);
+    if (!el) return false;
+    // Verificar display:none no próprio elemento e nos pais até 3 níveis
+    let node = el;
+    for (let i = 0; i < 5; i++) {
+        if (!node) break;
+        if (node.style && node.style.display === 'none') return false;
+        // Checar classe d-none do Bootstrap
+        if (node.classList && node.classList.contains('d-none')) return false;
+        node = node.parentElement;
+    }
+    return true;
+}
+
+function atualizarAjuda(tipo) {
+    const el = document.getElementById('ajudaConteudo');
+    if (!el) return;
+    let texto = AJUDA_BASE[tipo] || AJUDA_BASE[''] || '';
+
+    // Tab ativa de fonte de dados
+    const tabBanco = document.getElementById('tab-banco');
+    const tabAtiva = tabBanco && tabBanco.classList.contains('active') ? 'banco' : 'upload';
+
+    // Adicionar campos visíveis
+    const extras = [];
+    AJUDA_CAMPOS.forEach(c => {
+        // Se tem filtro de tab, só mostra se a tab ativa corresponde
+        if (c.tab && c.tab !== tabAtiva) return;
+        // Se tem checkFn customizado, usar ele
+        if (c.checkFn) {
+            if (c.checkFn()) extras.push(c.texto);
+            return;
+        }
+        // Se tem parent, verificar visibilidade do parent
+        const checkEl = c.parent || c.el;
+        if (elementoVisivel(checkEl)) {
+            extras.push(c.texto);
+        }
+    });
+
+    if (extras.length > 0) {
+        texto += '<br>' + extras.join('<br>');
+    }
+
+    el.innerHTML = '<p class="small mb-0">' + texto + '</p>';
+}
+
+// Escutar mudanças nos selects para atualizar ajuda
+document.getElementById('tipo')?.addEventListener('change', function() {
+    // Timeout para executar após o handler do app.js atualizar visibilidade dos campos
+    setTimeout(() => atualizarAjuda(this.value), 0);
+});
+document.getElementById('subtipo')?.addEventListener('change', function() {
+    const val = this.value;
+    setTimeout(() => { if (val) atualizarAjuda(val); }, 0);
+});
+
+// Atualizar ajuda quando muda a tab de fonte de dados
+document.querySelectorAll('#tabFonteDados .nav-link')?.forEach(tab => {
+    tab.addEventListener('shown.bs.tab', () => {
+        const tipo = document.getElementById('tipo')?.value || '';
+        const subtipo = document.getElementById('subtipo')?.value || '';
+        const tipoEfetivo = (tipo === 'Prefeitura' && subtipo) ? subtipo : tipo;
+        setTimeout(() => atualizarAjuda(tipoEfetivo), 0);
+    });
+});
+
+document.querySelectorAll('.btn-cancelar-exec').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        if (!confirm('Cancelar esta execução?')) return;
+        const execId = btn.dataset.execId;
+        const csrfToken = document.getElementById('csrfToken').value;
+        const fd = new FormData();
+        fd.append('csrf_token', csrfToken);
+        try {
+            const resp = await fetch(`/admin/execucao/${execId}/cancelar`, {
+                method: 'POST',
+                body: fd,
+            });
+            if (resp.ok || resp.redirected) {
+                location.reload();
+            } else {
+                const text = await resp.text();
+                alert('Erro ao cancelar: ' + (text || resp.status));
+            }
+        } catch (err) {
+            alert('Erro: ' + err.message);
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ExtratorUnificado{% endblock %}</title>
+    <link href="/static/vendor/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/vendor/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="/static/css/style.css" rel="stylesheet">
+    <link href="/static/css/itbl.css" rel="stylesheet">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    {% block layout %}
+    <!-- ═══ Sidebar ═══ -->
+    <aside class="sidebar" id="sidebar" style="position:fixed;top:0;left:0;bottom:0;width:240px;background:linear-gradient(180deg,#1a2e44,#142336);z-index:1040;display:flex;flex-direction:column;border-right:3px solid #5b9bd5;overflow:hidden;">
+
+        <!-- Brand + Toggle (mesma linha) -->
+        <div id="brandArea" style="display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.08);gap:10px;min-height:56px;cursor:pointer;">
+            <img src="/static/img/logo_edx_white.png" alt="EDX" class="sidebar-logo" style="height:32px;width:auto;max-width:100px;flex-shrink:0;">
+            <span class="brand-text" style="font-size:0.75rem;font-weight:700;color:#fff;line-height:1.2;white-space:nowrap;flex:1;">Extrator<br>Unificado</span>
+            <button id="sidebarToggle" title="Recolher menu"
+                    style="background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;padding:4px;border-radius:6px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color 0.2s;"
+                    onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.5)'">
+                <i class="bi bi-chevron-left" id="toggleIcon" style="font-size:0.85rem;"></i>
+            </button>
+        </div>
+
+        <!-- Navigation -->
+        <style>
+            /* ── Sidebar Brand ── */
+            .sidebar-brand {
+                display:flex; align-items:center; padding:12px 14px;
+                border-bottom:1px solid rgba(255,255,255,0.08);
+                gap:10px; min-height:56px;
+            }
+            .sidebar-logo { height:32px; width:auto; max-width:100px; flex-shrink:0; }
+            .sidebar .brand-text {
+                font-size:0.75rem; font-weight:700; color:#fff;
+                line-height:1.2; white-space:nowrap; flex:1;
+            }
+            .sidebar-toggle {
+                background:none; border:none; color:rgba(255,255,255,0.5);
+                cursor:pointer; padding:6px; border-radius:6px;
+                width:30px; height:30px; display:flex; align-items:center;
+                justify-content:center; flex-shrink:0; transition:all 0.2s;
+            }
+            .sidebar-toggle:hover { background:rgba(255,255,255,0.1); color:#fff; }
+
+            /* ── Nav links ── */
+            .sb-link {
+                display:flex; align-items:center; gap:12px; padding:10px 18px;
+                color:rgba(255,255,255,0.7); text-decoration:none; font-size:0.875rem;
+                font-weight:500; border-left:3px solid transparent; transition:all 0.15s;
+            }
+            .sb-link:hover { color:#fff; background:rgba(255,255,255,0.06); text-decoration:none; }
+            .sb-link.active { color:#fff; background:rgba(91,155,213,0.15); border-left-color:#5b9bd5; }
+            .sb-link i { font-size:1.1rem; width:22px; text-align:center; flex-shrink:0; }
+
+            .sb-admin { color:rgba(232,145,58,0.8); }
+            .sb-admin:hover { color:#e8913a; background:rgba(232,145,58,0.08); }
+            .sb-admin.active { color:#e8913a; background:rgba(232,145,58,0.12); border-left-color:#e8913a; }
+
+            /* ── Theme dropdown ── */
+            .theme-dropdown {
+                position:relative; display:inline-block;
+            }
+            .theme-btn {
+                background:none; border:1px solid var(--edx-border);
+                color:var(--edx-text-muted); cursor:pointer;
+                width:36px; height:36px; border-radius:8px;
+                display:flex; align-items:center; justify-content:center;
+                font-size:1.1rem; transition:all 0.2s;
+            }
+            .theme-btn:hover { background:var(--edx-accent); color:#fff; border-color:var(--edx-accent); }
+            .theme-menu {
+                display:none; position:absolute; right:0; top:42px;
+                background:var(--edx-card-bg); border:1px solid var(--edx-border);
+                border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,0.12);
+                min-width:160px; z-index:9999; overflow:hidden;
+            }
+            .theme-menu.show { display:block; }
+            .theme-option {
+                display:flex; align-items:center; gap:10px;
+                padding:10px 16px; cursor:pointer; font-size:0.85rem;
+                color:var(--edx-text); transition:background 0.15s;
+                border:none; background:none; width:100%; text-align:left;
+            }
+            .theme-option:hover { background:rgba(91,155,213,0.08); }
+            .theme-option.active { color:var(--edx-accent); font-weight:600; }
+            .theme-option i { width:18px; text-align:center; font-size:1rem; }
+        </style>
+
+        <nav style="flex:1;padding:4px 0;overflow-y:auto;">
+            <div data-sidebar-label style="padding:12px 18px 6px;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:rgba(255,255,255,0.35);">Principal</div>
+
+            <a href="/" class="sb-link {% block nav_dashboard %}{% endblock %}" title="Dashboard">
+                <i class="bi bi-speedometer2"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="/historico" class="sb-link {% block nav_historico %}{% endblock %}" title="Histórico">
+                <i class="bi bi-clock-history"></i>
+                <span>Histórico</span>
+            </a>
+
+            {% if usuario and usuario.is_admin %}
+            <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);">
+                <div data-sidebar-label style="padding:8px 18px 6px;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#e8913a;">
+                    <i class="bi bi-shield-lock"></i> Administração
+                </div>
+
+                <a href="/admin/empresas" class="sb-link sb-admin {% block nav_empresas %}{% endblock %}" title="Empresas">
+                    <i class="bi bi-building"></i>
+                    <span>Empresas</span>
+                </a>
+                <a href="/admin/usuarios" class="sb-link sb-admin {% block nav_usuarios %}{% endblock %}" title="Usuários">
+                    <i class="bi bi-people"></i>
+                    <span>Usuários</span>
+                </a>
+                <a href="/admin/logs" class="sb-link sb-admin {% block nav_logs %}{% endblock %}" title="Logs">
+                    <i class="bi bi-journal-text"></i>
+                    <span>Logs</span>
+                </a>
+            </div>
+            {% endif %}
+        </nav>
+
+        <!-- User info + Logout -->
+        {% if usuario %}
+        <div style="padding:12px 14px;border-top:1px solid rgba(255,255,255,0.08);">
+            <div style="display:flex;align-items:center;gap:10px;color:rgba(255,255,255,0.8);font-size:0.8rem;">
+                <div style="width:32px;height:32px;border-radius:50%;background:#2d5a8c;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:0.8rem;flex-shrink:0;">
+                    {{ usuario.nome[0]|upper }}
+                </div>
+                <div class="user-details">
+                    <div style="font-weight:600;font-size:0.8rem;color:#fff;">{{ usuario.nome }}</div>
+                    <div style="font-size:0.7rem;color:rgba(255,255,255,0.5);">{{ uso_hoje }}/{{ usuario.limite_diario }} hoje</div>
+                </div>
+            </div>
+            {% set pct = (uso_hoje / usuario.limite_diario * 100) if usuario.limite_diario > 0 else 0 %}
+            <div style="height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin-top:8px;overflow:hidden;">
+                <div style="height:100%;border-radius:2px;width:{{ pct|round|int }}%;background:{% if pct > 80 %}#e74c3c{% elif pct > 50 %}#f39c12{% else %}#5b9bd5{% endif %};"></div>
+            </div>
+            <a href="/logout" class="sb-link" style="color:#e74c3c;margin-top:4px;border-radius:6px;border-left:none;padding:10px 18px;"
+               onmouseover="this.style.background='rgba(231,76,60,0.1)'" onmouseout="this.style.background='transparent'">
+                <i class="bi bi-box-arrow-left"></i>
+                <span>Sair</span>
+            </a>
+        </div>
+        {% endif %}
+    </aside>
+
+    <!-- Mobile overlay -->
+    <div class="mobile-overlay" id="mobileOverlay"></div>
+
+    <!-- ═══ Topbar ═══ -->
+    <header class="topbar" id="topbar" style="position:fixed;top:0;left:240px;right:0;height:56px;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;padding:0 24px;z-index:1030;">
+        <div style="display:flex;align-items:center;gap:8px;">
+            <button class="d-md-none" id="mobileToggle" style="background:none;border:none;color:#6c7a89;cursor:pointer;font-size:1.2rem;padding:4px;">
+                <i class="bi bi-list"></i>
+            </button>
+            <span id="pageTitle" style="font-size:1rem;font-weight:600;color:#2c3e50;">{% block page_title %}Dashboard{% endblock %}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+            {% block topbar_actions %}{% endblock %}
+            <!-- Theme selector -->
+            <div class="theme-dropdown" id="themeDropdown">
+                <button class="theme-btn" id="themeToggle" title="Tema">
+                    <i class="bi bi-moon-fill" id="themeIcon"></i>
+                </button>
+                <div class="theme-menu" id="themeMenu">
+                    <button class="theme-option" data-theme="light">
+                        <i class="bi bi-sun-fill"></i> Claro
+                    </button>
+                    <button class="theme-option" data-theme="dark">
+                        <i class="bi bi-moon-fill"></i> Escuro
+                    </button>
+                    <button class="theme-option" data-theme="system">
+                        <i class="bi bi-display"></i> Sistema
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ═══ Main content ═══ -->
+    <main class="main-content" id="mainContent" style="margin-left:240px;margin-top:56px;padding:24px;min-height:calc(100vh - 56px);">
+        {% block content %}{% endblock %}
+    </main>
+    {% endblock %}
+
+    <script src="/static/vendor/bootstrap.bundle.min.js"></script>
+    <script>
+    (function() {
+        var sidebar = document.getElementById('sidebar');
+        var topbar = document.getElementById('topbar');
+        var main = document.getElementById('mainContent');
+        var toggleBtn = document.getElementById('sidebarToggle');
+        var toggleIcon = document.getElementById('toggleIcon');
+        var mobileToggle = document.getElementById('mobileToggle');
+        var overlay = document.getElementById('mobileOverlay');
+
+        var EXPANDED = 240;
+        var COLLAPSED = 64;
+
+        // ── Sidebar collapse/expand ──
+        function collapse() {
+            sidebar.style.width = COLLAPSED + 'px';
+            topbar.style.left = COLLAPSED + 'px';
+            main.style.marginLeft = COLLAPSED + 'px';
+            sidebar.classList.add('collapsed');
+            toggleIcon.className = 'bi bi-chevron-right';
+            localStorage.setItem('sidebar-collapsed', 'true');
+            // Hide text, shrink logo
+            sidebar.querySelectorAll('.sb-link span, .brand-text, .user-details').forEach(function(s){ s.style.display = 'none'; });
+            sidebar.querySelectorAll('[data-sidebar-label]').forEach(function(l){ l.style.display = 'none'; });
+            sidebar.querySelectorAll('.sb-link').forEach(function(l){ l.style.justifyContent = 'center'; l.style.paddingLeft = '0'; l.style.paddingRight = '0'; });
+            // Shrink logo to fit collapsed width
+            var logo = sidebar.querySelector('.sidebar-logo');
+            if (logo) { logo.style.height = '22px'; logo.style.maxWidth = '38px'; }
+            // Brand area: compact layout
+            var brand = document.getElementById('brandArea');
+            if (brand) { brand.style.justifyContent = 'center'; brand.style.padding = '10px 6px'; brand.style.gap = '4px'; }
+            // Keep toggle visible
+            if (toggleBtn) { toggleBtn.style.display = 'flex'; toggleBtn.title = 'Expandir menu'; }
+        }
+
+        function expand() {
+            sidebar.style.width = EXPANDED + 'px';
+            topbar.style.left = EXPANDED + 'px';
+            main.style.marginLeft = EXPANDED + 'px';
+            sidebar.classList.remove('collapsed');
+            toggleIcon.className = 'bi bi-chevron-left';
+            localStorage.setItem('sidebar-collapsed', 'false');
+            sidebar.querySelectorAll('.sb-link span, .brand-text, .user-details').forEach(function(s){ s.style.display = ''; });
+            sidebar.querySelectorAll('[data-sidebar-label]').forEach(function(l){ l.style.display = ''; });
+            sidebar.querySelectorAll('.sb-link').forEach(function(l){ l.style.justifyContent = ''; l.style.paddingLeft = ''; l.style.paddingRight = ''; });
+            var logo = sidebar.querySelector('.sidebar-logo');
+            if (logo) { logo.style.height = '32px'; logo.style.maxWidth = '100px'; }
+            var brand = document.getElementById('brandArea');
+            if (brand) { brand.style.justifyContent = ''; brand.style.padding = '12px 14px'; brand.style.gap = '10px'; }
+            if (toggleBtn) { toggleBtn.style.display = 'flex'; toggleBtn.title = 'Recolher menu'; }
+        }
+
+        // Restore saved state
+        if (localStorage.getItem('sidebar-collapsed') === 'true') { collapse(); }
+
+        // Toggle on click
+        if (toggleBtn) toggleBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (sidebar.classList.contains('collapsed')) { expand(); } else { collapse(); }
+        });
+
+        // Click on brand area to toggle
+        var brandArea = document.getElementById('brandArea');
+        if (brandArea) brandArea.addEventListener('click', function(e) {
+            // Não duplicar se clicou no botão toggle
+            if (e.target === toggleBtn || toggleBtn.contains(e.target)) return;
+            if (sidebar.classList.contains('collapsed')) { expand(); } else { collapse(); }
+        });
+
+        // Mobile
+        if (mobileToggle) mobileToggle.addEventListener('click', function() {
+            sidebar.classList.toggle('mobile-open');
+            sidebar.style.transform = sidebar.classList.contains('mobile-open') ? 'translateX(0)' : '';
+        });
+        if (overlay) overlay.addEventListener('click', function() {
+            sidebar.classList.remove('mobile-open');
+            sidebar.style.transform = '';
+        });
+
+        // ── Theme: light / dark / system ──
+        var themeToggle = document.getElementById('themeToggle');
+        var themeIcon = document.getElementById('themeIcon');
+        var themeMenu = document.getElementById('themeMenu');
+        var html = document.documentElement;
+        var pageTitle = document.getElementById('pageTitle');
+
+        function getSystemTheme() {
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+
+        function applyTheme(effective) {
+            html.setAttribute('data-theme', effective);
+            // Atualizar inline styles que o CSS externo pode não controlar
+            if (topbar) {
+                topbar.style.background = effective === 'dark' ? '#142336' : '#fff';
+                topbar.style.borderColor = effective === 'dark' ? '#2d4a66' : '#e2e8f0';
+            }
+            if (pageTitle) {
+                pageTitle.style.color = effective === 'dark' ? '#e2e8f0' : '#2c3e50';
+            }
+            if (main) {
+                main.style.background = effective === 'dark' ? '#0f1923' : '#f0f4f8';
+            }
+            // Atualizar body
+            document.body.style.background = effective === 'dark' ? '#0f1923' : '#f0f4f8';
+            document.body.style.color = effective === 'dark' ? '#e2e8f0' : '#2c3e50';
+        }
+
+        function updateIcon(preference) {
+            var icons = { light: 'bi bi-sun-fill', dark: 'bi bi-moon-fill', system: 'bi bi-display' };
+            themeIcon.className = icons[preference] || 'bi bi-display';
+        }
+
+        function updateMenuActive(preference) {
+            themeMenu.querySelectorAll('.theme-option').forEach(function(btn) {
+                btn.classList.toggle('active', btn.getAttribute('data-theme') === preference);
+            });
+        }
+
+        function setTheme(preference) {
+            localStorage.setItem('theme', preference);
+            var effective = preference === 'system' ? getSystemTheme() : preference;
+            applyTheme(effective);
+            updateIcon(preference);
+            updateMenuActive(preference);
+        }
+
+        // Init theme
+        var savedTheme = localStorage.getItem('theme') || 'system';
+        setTheme(savedTheme);
+
+        // Listen for system theme changes
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
+            if (localStorage.getItem('theme') === 'system') {
+                applyTheme(getSystemTheme());
+            }
+        });
+
+        // Toggle dropdown
+        themeToggle.addEventListener('click', function(e) {
+            e.stopPropagation();
+            themeMenu.classList.toggle('show');
+        });
+
+        // Theme option click
+        themeMenu.querySelectorAll('.theme-option').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                setTheme(this.getAttribute('data-theme'));
+                themeMenu.classList.remove('show');
+            });
+        });
+
+        // Close dropdown on outside click
+        document.addEventListener('click', function() {
+            themeMenu.classList.remove('show');
+        });
+    })();
+    </script>
+    <script src="/static/js/itbl.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
