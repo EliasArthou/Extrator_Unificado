@@ -5,6 +5,7 @@ Todas as funções de suporte
 import os
 import sys
 import time
+import threading
 from pathlib import Path
 import pyodbc
 import glob
@@ -29,6 +30,21 @@ from rich.console import Console
 load_dotenv()
 
 console = Console(force_terminal=True, color_system="truecolor")
+
+# Lock global pra prints thread-safe quando rodando em paralelo (workers Playwright etc)
+_print_lock = threading.Lock()
+
+
+def _flush_log(log: list[str]):
+    """Imprime todas as mensagens acumuladas no backlog de uma vez (thread-safe).
+
+    Util pra acumular mensagens dentro de uma extracao paralela e imprimir
+    tudo junto no fim, evitando logs intercalados de varios workers.
+    """
+    with _print_lock:
+        for msg in log:
+            console.print(msg)
+    log.clear()
 
 
 # Constantes para SetThreadExecutionState

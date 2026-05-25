@@ -63,7 +63,7 @@ from rich.text import Text
 
 from auxiliares import utils as aux
 from auxiliares import sensiveis as senha
-from extratores.Prefeitura import Biptu_hibrido as Bh
+from extratores.Bombeiros import bombeiros_hibrido as Bh
 
 # ── Console Rich global ─────────────────────────────────────────────────────
 console = Console(force_terminal=True, color_system="truecolor")

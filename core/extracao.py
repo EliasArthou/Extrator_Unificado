@@ -14,7 +14,7 @@ from auxiliares import messagebox as msg
 import sys
 from extratores.Condominios import condominios
 from extratores.Prefeitura import Biptu
-from extratores.Prefeitura import Biptu_hibrido as Bh
+from extratores.Bombeiros import bombeiros_hibrido as Bh
 import pandas as pd
 from dotenv import load_dotenv
 
@@ -177,7 +177,7 @@ class Extrator:
         Extrai boletos de bombeiros usando Playwright + AntiCaptcha.
 
         Migrado de Biptu.extrairbombeiros (Selenium, captcha manual via input())
-        para Biptu_hibrido.extrairbombeiros_hibrido (Playwright + AntiCaptcha
+        para bombeiros_hibrido.extrairbombeiros_hibrido (Playwright + AntiCaptcha
         automatico + fallback IPTU).
 
         PENDENTE (Pass 3) - regras de negocio nao migradas:

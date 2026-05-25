@@ -860,7 +860,7 @@ def _extrair_condominios_api(job_id, linhas, pasta_download, params):
 def _extrair_prefeitura(job_id, linhas, pasta_download, params):
     """Extração de IPTU / Nada Consta / Certidão via Playwright híbrido."""
     from playwright.sync_api import sync_playwright
-    from extratores.Prefeitura import Biptu_hibrido as Bh
+    from extratores.Bombeiros import bombeiros_hibrido as Bh
 
     subtipo = params.get("subtipo", "IPTU")
     visual = SimpleNamespace(
@@ -937,7 +937,7 @@ def _extrair_prefeitura(job_id, linhas, pasta_download, params):
 def _extrair_bombeiros(job_id, linhas, pasta_download, params):
     """Extração de Bombeiros via Playwright híbrido."""
     from playwright.sync_api import sync_playwright
-    from extratores.Prefeitura import Biptu_hibrido as Bh
+    from extratores.Bombeiros import bombeiros_hibrido as Bh
 
     visual = SimpleNamespace(
         tipopagamento=SimpleNamespace(get=lambda: params.get("tipopagamento", 2)),
