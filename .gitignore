@@ -53,6 +53,7 @@ chrome-profile/
 logs/
 *.xlsx
 *.txt
+!requirements.txt
 favicon.ico
 chromedriver.exe
 
