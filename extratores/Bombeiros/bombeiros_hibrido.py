@@ -441,16 +441,13 @@ def _baixar_boleto_bombeiros(page: Page, form_fields: dict,
 # ============================================================
 
 def extrairbombeiros_hibrido(page: Page, objeto, linha, dataatual="",
-                              cota_unica: bool = False,
-                              respeitar_horario: bool = False):
+                              cota_unica: bool = False):
     """
     Extrai boleto de bombeiros usando Playwright + AntiCaptcha reCAPTCHA v2.
     Acumula todas as mensagens em memoria e imprime de uma vez no final.
 
     Parametros:
         cota_unica: Se True, filtra debitos mantendo so um por exercicio (descarta parcelas).
-        respeitar_horario: Se True (default), nao tenta extrair apos as 22h
-            (site CBM bloqueia geracao de boletos nesse horario).
 
     Retorna: (dados_list, df) - dados_list: [codigo, nrcbm, ano, status], df: DataFrame ou None
     """
@@ -461,21 +458,6 @@ def extrairbombeiros_hibrido(page: Page, objeto, linha, dataatual="",
         dataatual = aux.hora("America/Sao_Paulo", "DATA")
 
     cod = str(linha[Codigo]).strip()
-    nrcbm_preview = str(linha[NrCBM]).strip()
-    anoextracao_preview = str(date.today().year)
-
-    # Regra: site CBM nao gera boletos apos as 22h
-    if respeitar_horario:
-        from datetime import time as _time_cls
-        hora_atual = aux.hora("America/Sao_Paulo", "HORA")
-        if hora_atual >= _time_cls(22, 0):
-            _log.append(
-                f"[yellow]\\[INFO] Site CBM nao gera boletos apos as 22h "
-                f"(hora atual: {hora_atual.strftime('%H:%M')}). Pulando.[/yellow]"
-            )
-            _flush_log(_log)
-            return [cod, nrcbm_preview, anoextracao_preview, "Fora do horario (apos 22h)"], None
-
     cod = str(linha[Codigo]).strip()
     nrcbm = str(linha[NrCBM]).strip()
     nrcbm_limpo = nrcbm.replace("-", "").replace(".", "").replace(" ", "")
@@ -620,7 +602,8 @@ def extrairbombeiros_hibrido(page: Page, objeto, linha, dataatual="",
 
 def testar_bombeiros(inscricao: str = "3605693-5", iptu: str = "",
                      cidade: str = "", cod: str = "",
-                     pasta_download: str = "Downloads/Bombeiros", headless: bool = False):
+                     pasta_download: str = "Downloads/Bombeiros", headless: bool = False,
+                     cota_unica: bool = False):
     """Testa a extracao de Bombeiros chamando extrairbombeiros_hibrido."""
     from playwright.sync_api import sync_playwright
     from types import SimpleNamespace
@@ -652,7 +635,7 @@ def testar_bombeiros(inscricao: str = "3605693-5", iptu: str = "",
         page = context.pages[0] if context.pages else context.new_page()
 
         try:
-            dados, df = extrairbombeiros_hibrido(page, objeto, linha)
+            dados, df = extrairbombeiros_hibrido(page, objeto, linha, cota_unica=cota_unica)
             print(f"\n[RESULTADO] {dados}")
             if df is not None:
                 print(df.to_string(index=False))
@@ -680,6 +663,8 @@ if __name__ == "__main__":
                         help="Pasta para salvar o PDF")
     parser.add_argument("--visible", action="store_true",
                         help="Abrir janela do navegador (padrao: headless)")
+    parser.add_argument("--cota-unica", action="store_true", dest="cota_unica",
+                        help="Filtrar pra 1 boleto por exercicio (cota unica). Default: parcelado.")
     args = parser.parse_args()
 
     testar_bombeiros(
@@ -689,4 +674,5 @@ if __name__ == "__main__":
         cod=args.cod,
         pasta_download=args.pasta,
         headless=not args.visible,
+        cota_unica=args.cota_unica,
     )

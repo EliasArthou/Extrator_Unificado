@@ -955,6 +955,9 @@ def _extrair_bombeiros(job_id, linhas, pasta_download, params):
     total = len(linhas)
     num_workers = max(1, min(params.get("num_workers", 1), 8))
 
+    # Cota Unica vs Parcelada (lida do form: tipopagamento=1 = Cota Unica, 2 = Parcelado)
+    cota_unica = int(params.get("tipopagamento", 2)) == 1
+
     import queue as queue_mod
 
     work_queue = queue_mod.Queue()
@@ -993,7 +996,10 @@ def _extrair_bombeiros(job_id, linhas, pasta_download, params):
                     )
 
                     try:
-                        dados, df = Bh.extrairbombeiros_hibrido(page, objeto, linha)
+                        dados, df = Bh.extrairbombeiros_hibrido(
+                            page, objeto, linha,
+                            cota_unica=cota_unica,
+                        )
                         status_item = dados[3] if len(dados) > 3 else "ERRO"
                         with results_lock:
                             if "ERRO" in str(status_item).upper():

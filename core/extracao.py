@@ -187,8 +187,6 @@ class Extrator:
             em _extrair_debitos_bombeiros (campo status_temporal no dict).
           - Cidades especiais (Macae/SG/Campos): detectadas via mensagem
             "realize a consulta atraves do numero da inscricao" -> fallback IPTU.
-          - Limite 22h: parametrizavel via respeitar_horario. Desligado por default
-            (passe respeitar_horario=True pra reativar).
         """
         from playwright.sync_api import sync_playwright
 
@@ -234,7 +232,6 @@ class Extrator:
                         page, self, linha,
                         aux.hora('America/Sao_Paulo', 'DATA'),
                         cota_unica=cota_unica,
-                        respeitar_horario=False,
                     )
             finally:
                 try:

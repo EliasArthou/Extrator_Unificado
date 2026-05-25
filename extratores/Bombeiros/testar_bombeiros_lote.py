@@ -184,7 +184,7 @@ def _worker(worker_id: int, work_queue: queue.Queue, objeto,
                 )
 
                 try:
-                    dados, df = Bh.extrairbombeiros_hibrido(page, objeto, linha)
+                    dados, df = Bh.extrairbombeiros_hibrido(page, objeto, linha, cota_unica=args.cota_unica)
                     status = dados[3] if len(dados) > 3 else 'ERRO'
                 except Exception as e:
                     status = f"ERRO: {e}"
@@ -234,6 +234,8 @@ def main():
                         help="Número de workers em paralelo (padrão: 1)")
     parser.add_argument("--visible", action="store_true",
                         help="Abrir janela do navegador (padrão: headless)")
+    parser.add_argument("--cota-unica", action="store_true", dest="cota_unica",
+                        help="Filtrar pra 1 boleto por exercicio (cota unica). Default: parcelado.")
     parser.add_argument("--dry-run", action="store_true",
                         help="Só lista as inscrições, sem extrair")
     args = parser.parse_args()
@@ -391,7 +393,7 @@ def main():
                         )
 
                         try:
-                            dados, df = Bh.extrairbombeiros_hibrido(page, objeto, linha)
+                            dados, df = Bh.extrairbombeiros_hibrido(page, objeto, linha, cota_unica=args.cota_unica)
                             status = dados[3] if len(dados) > 3 else 'ERRO'
                         except Exception as e:
                             status = f"ERRO: {e}"
