@@ -147,7 +147,7 @@ try:
     )
     _usa_log_global = True
 except ImportError:
-    DOWNLOADS_DIR = Path("./Downloads/Condomínios")
+    DOWNLOADS_DIR = Path("./Downloads")
     _usa_log_global = False
 
 

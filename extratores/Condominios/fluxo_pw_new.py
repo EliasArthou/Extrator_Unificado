@@ -128,7 +128,7 @@ def log(msg: str):
 
 
 USER_DATA_DIR = Path("./chrome-profile")
-DOWNLOADS_DIR = Path("./Downloads/Condomínios")
+DOWNLOADS_DIR = Path("./Downloads")
 
 # ===== CACHE DE CÓDIGOS DE BARRAS PARA DETECTAR DUPLICATAS ===== ↓
 CODIGOS_BARRAS_EXISTENTES = set()  # Set global com códigos já baixados
