@@ -180,12 +180,15 @@ class Extrator:
         para bombeiros_hibrido.extrairbombeiros_hibrido (Playwright + AntiCaptcha
         automatico + fallback IPTU).
 
-        PENDENTE (Pass 3) - regras de negocio nao migradas:
-          - Limite de horario 22h (site CBM nao gera apos esse horario)
-          - Cota unica vs parcelada
-          - Marcar Vencido vs Imposto Ano Corrente
-          - Tratamento explicito de cidades especiais (Macae, Sao Goncalo,
-            Campos dos Goytacazes)
+        Pass 3 (regras migradas do taxabombeiros legado):
+          - Cota unica vs Parcelada: lida de self.resposta (1=Cota Unica), passada
+            via parametro cota_unica do extrairbombeiros_hibrido.
+          - Status temporal Vencido / Imposto Ano Corrente: calculado por debito
+            em _extrair_debitos_bombeiros (campo status_temporal no dict).
+          - Cidades especiais (Macae/SG/Campos): detectadas via mensagem
+            "realize a consulta atraves do numero da inscricao" -> fallback IPTU.
+          - Limite 22h: parametrizavel via respeitar_horario. Desligado por default
+            (passe respeitar_horario=True pra reativar).
         """
         from playwright.sync_api import sync_playwright
 
@@ -223,7 +226,16 @@ class Extrator:
                     time.sleep(0.1)
                     self.texto = ''
 
-                    dadosiptu, df = Bh.extrairbombeiros_hibrido(page, self, linha, aux.hora('America/Sao_Paulo', 'DATA'))
+                    # Cota Unica vs Parcelada: vem do radio da janela
+                    # (tipopagamento=1 = Cota Unica, 2 = Parcelado)
+                    cota_unica = str(getattr(self, 'resposta', '')) == '1'
+
+                    dadosiptu, df = Bh.extrairbombeiros_hibrido(
+                        page, self, linha,
+                        aux.hora('America/Sao_Paulo', 'DATA'),
+                        cota_unica=cota_unica,
+                        respeitar_horario=False,
+                    )
             finally:
                 try:
                     context.close()

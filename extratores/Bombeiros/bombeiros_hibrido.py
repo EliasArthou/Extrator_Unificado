@@ -164,6 +164,13 @@ def _submeter_busca_bombeiros(page: Page, campos: dict,
             return True, ""
         elif "nao encontrado" in html_resp.lower() or "não encontrado" in html_resp.lower():
             return False, "Imovel nao encontrado"
+        elif (
+            "realize a consulta através do número da inscri" in html_resp.lower()
+            or "realize a consulta atraves do numero da inscri" in html_resp.lower()
+        ):
+            # Cidades especiais (Macae, Sao Goncalo, Campos dos Goytacazes etc.)
+            # exigem busca por inscricao predial/IPTU em vez de CBMERJ.
+            return False, "CIDADE_ESPECIAL"
         else:
             trecho = html_resp[:500].replace("\n", " ")
             _msg(f"[dim]\\[DEBUG] Resposta: {trecho}[/dim]")
@@ -219,8 +226,17 @@ def _navegar_bombeiros(page: Page, nrcbm: str, nriptu: str = "",
             if sucesso:
                 return True, ""
 
+            # Cidade especial detectada: ja sabemos que CBMERJ nao funciona aqui,
+            # vai direto pro fallback IPTU
+            if erro == "CIDADE_ESPECIAL":
+                if tem_iptu:
+                    _msg(f"[yellow]\\[PW] Cidade especial (Macae/SG/Campos): CBMERJ nao funciona, indo pra IPTU...[/yellow]")
+                    page.goto(URL_IFRAME_BOMBEIROS, wait_until="networkidle", timeout=60000)
+                    page.wait_for_selector("input[name='cbmerj']", state="visible", timeout=15000)
+                else:
+                    return False, "Cidade especial exige IPTU, mas nao foi fornecido"
             # Nao encontrou - tenta inscricao predial
-            if tem_iptu:
+            elif tem_iptu:
                 _msg(f"[yellow]\\[PW] CBMERJ nao encontrado, tentando por inscricao predial...[/yellow]")
                 page.goto(URL_IFRAME_BOMBEIROS, wait_until="networkidle", timeout=60000)
                 page.wait_for_selector("input[name='cbmerj']", state="visible", timeout=15000)
@@ -312,12 +328,24 @@ def _extrair_debitos_bombeiros(page: Page, _log: list | None = None) -> list[dic
 
         exercicio_raw = colunas[0].get_text(strip=True)
         exercicio_limpo = re.sub(r"\D", "", exercicio_raw)  # Remove tudo que nao for digito
+        exercicio_final = exercicio_limpo or exercicio_raw
+
+        # Status temporal: Vencido se exercicio < ano_atual - 1, senao Imposto Ano Corrente
+        # (regra do taxabombeiros.py legado, linha 148-151)
+        try:
+            exercicio_int = int(exercicio_limpo)
+            ano_atual = date.today().year
+            status_temporal = "Vencido" if exercicio_int < ano_atual - 1 else "Imposto Ano Corrente"
+        except (ValueError, TypeError):
+            status_temporal = "Indefinido"
+
         item = {
-            "exercicio": exercicio_limpo or exercicio_raw,  # Fallback pro original se ficar vazio
+            "exercicio": exercicio_final,  # Fallback pro original se ficar vazio
             "vencimento": colunas[1].get_text(strip=True),
             "taxa": colunas[2].get_text(strip=True),
             "multa": colunas[3].get_text(strip=True),
             "situacao": situacao,
+            "status_temporal": status_temporal,
             "form_fields": hidden_fields,
             "tem_boleto": bool(form),
         }
@@ -412,10 +440,18 @@ def _baixar_boleto_bombeiros(page: Page, form_fields: dict,
 # Funcao principal: extrai boleto de bombeiros
 # ============================================================
 
-def extrairbombeiros_hibrido(page: Page, objeto, linha, dataatual=""):
+def extrairbombeiros_hibrido(page: Page, objeto, linha, dataatual="",
+                              cota_unica: bool = False,
+                              respeitar_horario: bool = False):
     """
     Extrai boleto de bombeiros usando Playwright + AntiCaptcha reCAPTCHA v2.
     Acumula todas as mensagens em memoria e imprime de uma vez no final.
+
+    Parametros:
+        cota_unica: Se True, filtra debitos mantendo so um por exercicio (descarta parcelas).
+        respeitar_horario: Se True (default), nao tenta extrair apos as 22h
+            (site CBM bloqueia geracao de boletos nesse horario).
+
     Retorna: (dados_list, df) - dados_list: [codigo, nrcbm, ano, status], df: DataFrame ou None
     """
     # Backlog: acumula mensagens e imprime tudo junto no final
@@ -423,6 +459,22 @@ def extrairbombeiros_hibrido(page: Page, objeto, linha, dataatual=""):
 
     if dataatual == "":
         dataatual = aux.hora("America/Sao_Paulo", "DATA")
+
+    cod = str(linha[Codigo]).strip()
+    nrcbm_preview = str(linha[NrCBM]).strip()
+    anoextracao_preview = str(date.today().year)
+
+    # Regra: site CBM nao gera boletos apos as 22h
+    if respeitar_horario:
+        from datetime import time as _time_cls
+        hora_atual = aux.hora("America/Sao_Paulo", "HORA")
+        if hora_atual >= _time_cls(22, 0):
+            _log.append(
+                f"[yellow]\\[INFO] Site CBM nao gera boletos apos as 22h "
+                f"(hora atual: {hora_atual.strftime('%H:%M')}). Pulando.[/yellow]"
+            )
+            _flush_log(_log)
+            return [cod, nrcbm_preview, anoextracao_preview, "Fora do horario (apos 22h)"], None
 
     cod = str(linha[Codigo]).strip()
     nrcbm = str(linha[NrCBM]).strip()
@@ -471,6 +523,34 @@ def extrairbombeiros_hibrido(page: Page, objeto, linha, dataatual=""):
     for d in debitos:
         _log.append(f"[dim]  Exercicio {d['exercicio']} | Venc: {d['vencimento']} | "
                      f"Taxa: {d['taxa']} | Multa: {d['multa']} | Sit: {d['situacao']}[/dim]")
+
+    # Detecta multi-parcela (varias linhas pro mesmo exercicio) e marca no log
+    # Isso ajuda a identificar clientes pra refinar a regra de cota_unica
+    from collections import Counter
+    contagem_por_exercicio = Counter(d["exercicio"] for d in debitos)
+    multi_parcela = {ex: n for ex, n in contagem_por_exercicio.items() if n > 1}
+    if multi_parcela:
+        for ex, n in multi_parcela.items():
+            _log.append(
+                f"[bold magenta]\\[!!! MULTI-PARCELA] Cliente {cod} tem {n} "
+                f"linhas pro exercicio {ex} - analisar pra refinar cota_unica[/bold magenta]"
+            )
+
+    # Regra: cota unica — agrupa por exercicio, mantem so o primeiro de cada
+    # (filtra parcelas; cada exercicio gera 1 boleto so)
+    if cota_unica:
+        vistos = set()
+        debitos_filtrados = []
+        for d in debitos:
+            if d["exercicio"] not in vistos:
+                vistos.add(d["exercicio"])
+                debitos_filtrados.append(d)
+        if len(debitos) != len(debitos_filtrados):
+            _log.append(
+                f"[cyan]\\[CotaUnica] {len(debitos)} debito(s) -> "
+                f"{len(debitos_filtrados)} apos filtrar parcelas[/cyan]"
+            )
+        debitos = debitos_filtrados
 
     # Baixa boleto de cada exercicio com debito
     df_total = None
