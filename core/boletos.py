@@ -1,4 +1,4 @@
-from pyzbar.pyzbar import decode
+from pyzbar.pyzbar import decode, ZBarSymbol
 from pdf2image import convert_from_path
 import os
 from auxiliares import utils as aux
@@ -44,9 +44,22 @@ def barcodereader(completepath, qualidade=300, renomear=True):
                                    poppler_path=caminhpoppler)
 
         for pagina in pages:
-            infocodigobarras = decode(pagina)
+            # Restringe symbols aos relevantes pra boletos BR: I25 (padrao),
+            # QRCODE (boletos novos com QR PIX), PDF417 (alguns boletos antigos)
+            # e CODE128 (etiquetas comerciais). Evita warnings ruidosos do decoder
+            # DataBar (zbar tenta varios decoders em paralelo por default).
+            # Bonus: leitura mais rapida que decode() sem restricao.
+            infocodigobarras = decode(pagina, symbols=[
+                ZBarSymbol.I25,
+                ZBarSymbol.QRCODE,
+                ZBarSymbol.PDF417,
+                ZBarSymbol.CODE128,
+            ])
             if infocodigobarras:
-                infocodigobarras = list(filter(lambda x: x.type == 'I25', infocodigobarras))
+                # Aceita I25 (boleto BR padrao) e QRCODE (boleto novo com QR PIX)
+                infocodigobarras = list(filter(
+                    lambda x: x.type in ('I25', 'QRCODE'), infocodigobarras
+                ))
                 if infocodigobarras:
                     codigobarras = infocodigobarras[0].data.decode('ASCII')
                     linhadigitavel = linha_digitavel(codigobarras)

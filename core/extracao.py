@@ -68,6 +68,16 @@ class Extrator:
         if not bool(self.visual.somentevalores.get()):
             self.pastadownload = aux.caminhoselecionado(3, 'Selecione o caminho dos arquivos:', caminhoini=self.pastadownload)
 
+        # Padroniza subpasta por tipo de extração (Downloads/Bombeiros, Downloads/Prefeitura, Downloads/Condomínios)
+        _subpasta_por_tipo = {
+            'Bombeiros': 'Bombeiros',
+            'Prefeitura': 'Prefeitura',
+            'Condomínios': 'Condomínios',
+        }.get(self.extracao, '')
+        if _subpasta_por_tipo and not self.pastadownload.endswith(_subpasta_por_tipo):
+            self.pastadownload = os.path.join(self.pastadownload, _subpasta_por_tipo)
+            os.makedirs(self.pastadownload, exist_ok=True)
+
         self.resposta = str(self.visual.tipopagamento.get())
         if self.visual.tipoextracao.get() != 'Condomínios' and caminhobanco[-4:].lower() != 'xlsx':
             self.indicecliente = aux.criarinputbox('Cliente de Corte', 'Iniciar a partir de um cliente? (0 fará de todos da lista)', valorinicial='0')

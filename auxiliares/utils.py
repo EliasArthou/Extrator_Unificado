@@ -363,7 +363,9 @@ def caminhoprojeto(subpasta=''):
         if getattr(sys, 'frozen', False):
             caminho = os.path.dirname(sys.executable)
         else:
-            caminho = os.path.dirname(os.path.abspath(__file__))
+            # __file__ = <raiz>/auxiliares/utils.py
+            # Sobe 2 niveis: utils.py -> auxiliares -> <raiz>
+            caminho = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
         if len(caminho) > 0:
             if len(subpasta) > 0:

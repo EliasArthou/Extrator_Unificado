@@ -1134,7 +1134,7 @@ if __name__ == "__main__":
                         help="Número de inscrição (ex: 3.146.968-7)")
     parser.add_argument("-t", "--tipo", default="1",
                         help="Tipo de pagamento: 1=Cota Única, 2=1ª data, 3=2ª data, 4=3ª data (só IPTU)")
-    parser.add_argument("-p", "--pasta", default="Downloads/Bombeiros",
+    parser.add_argument("-p", "--pasta", default="Downloads/IPTU",
                         help="Pasta para salvar o PDF")
     parser.add_argument("--iptu", default="",
                         help="Inscrição predial/IPTU (fallback pra bombeiros)")

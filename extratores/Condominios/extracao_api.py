@@ -147,7 +147,7 @@ try:
     )
     _usa_log_global = True
 except ImportError:
-    DOWNLOADS_DIR = Path("./downloads")
+    DOWNLOADS_DIR = Path("./Downloads/Condomínios")
     _usa_log_global = False
 
 
@@ -2055,7 +2055,7 @@ def _processar_superlogica(base_url, email, senha, grupo, log) -> list:
                     log(f"    Erro download: {e}")
                     resultados.append(_resultado(id_unico, "erro_download", str(e), None))
                     continue
-                sufixo = f"_{i_global_unico}" if i_global_unico > 0 else ""
+                sufixo = ""  # Era f"_{i_global_unico}"; agora deixa _salvar_pdf decidir via colisao
                 resultados.append(_salvar_pdf(
                     pdf_bytes, id_unico,
                     f"OK | {nome_condo_api} / {unidade_api or '(sem nome)'}",
@@ -2224,7 +2224,7 @@ def _processar_livefacilities(base_url, usuario, senha, grupo, log) -> list:
                         log(f"  [{identificador}] Erro download: {e}")
                         resultados.append(_resultado(identificador, "erro_download", str(e), None))
                         continue
-                    sufixo = f"_{i_global}" if i_global > 0 else ""
+                    sufixo = ""  # Era f"_{i_global}"; agora deixa _salvar_pdf decidir via colisao
                     resultados.append(_salvar_pdf(
                         pdf_bytes, identificador,
                         f"OK | {unidade_dict['texto']}",
@@ -2334,7 +2334,7 @@ def _processar_webware(site_url, usuario, senha, grupo, log) -> list:
                         log(f"  [{identificador}] Erro download: {e}")
                         resultados.append(_resultado(identificador, "erro_download", str(e), None))
                         continue
-                    sufixo = f"_{i_global}" if i_global > 0 else ""
+                    sufixo = ""  # Era f"_{i_global}"; agora deixa _salvar_pdf decidir via colisao
                     resultados.append(_salvar_pdf(
                         pdf_bytes, identificador,
                         f"OK | {card['titulo']}",
@@ -2444,7 +2444,7 @@ def _processar_immobileweb(site_url, usuario, senha, grupo, log) -> list:
 
             unidade = boleto.get("Unidade", "")
             referencia = boleto.get("Referencia", "")
-            sufixo = f"_{i_global}" if i_global > 0 else ""
+            sufixo = ""  # Era f"_{i_global}"; agora deixa _salvar_pdf decidir via colisao
             resultados.append(_salvar_pdf(
                 pdf_bytes, identificador,
                 f"OK | {unidade} / {referencia}",
@@ -2523,7 +2523,7 @@ def _processar_protel(usuario, senha, grupo, log) -> list:
                 log(f"  [{identificador}] Erro download: {e}")
                 resultados.append(_resultado(identificador, "erro_download", str(e), None))
                 continue
-            sufixo = f"_{i}" if i > 0 else ""
+            sufixo = ""  # Era f"_{i}"; agora deixa _salvar_pdf decidir via colisao
             resultados.append(_salvar_pdf(
                 pdf_bytes, identificador,
                 f"OK | Protel / {alvo_apto}",
@@ -2598,7 +2598,7 @@ def _processar_nacional(usuario, senha, grupo, log) -> list:
                 log(f"  [{identificador}] Erro download: {e}")
                 resultados.append(_resultado(identificador, "erro_download", str(e), None))
                 continue
-            sufixo = f"_{i}" if i > 0 else ""
+            sufixo = ""  # Era f"_{i}"; agora deixa _salvar_pdf decidir via colisao
             resultados.append(_salvar_pdf(
                 pdf_bytes, identificador,
                 f"OK | Nacional / {alvo_apto}",
@@ -2743,7 +2743,7 @@ def _processar_cipa(usuario, senha, grupo, log) -> list:
                     resultados.append(_resultado(identificador, "erro_download", str(e), None))
                     continue
 
-                sufixo = f"_{i_global}" if i_global > 0 else ""
+                sufixo = ""  # Era f"_{i_global}"; agora deixa _salvar_pdf decidir via colisao
                 log(f"  [{identificador}] recibo={recibo} venc={venc}")
                 resultados.append(_salvar_pdf(
                     pdf_bytes, identificador,
@@ -2916,7 +2916,7 @@ def _processar_condomob(site_url: str, email: str, senha: str, grupo: list, log)
                         log(f"  [{identificador}] Erro download: {e}")
                         resultados.append(_resultado(identificador, "erro_download", str(e), None))
                         continue
-                    sufixo = f"_{i_global}" if i_global > 0 else ""
+                    sufixo = ""  # Era f"_{i_global}"; agora deixa _salvar_pdf decidir via colisao
                     resultados.append(_salvar_pdf(
                         pdf_bytes, identificador,
                         f"OK | Condomob / {condo_nome} / {unit_identificador} venc={venc}",
@@ -3202,7 +3202,18 @@ if __name__ == "__main__":
     #   py extracao_api.py 2026_04 --reset                → apaga TODOS os PDFs de downloads/ e baixa tudo
     #   py extracao_api.py 2026_04 ADIPLANTEC             → ciclo normal + filtro de admin
     #   py extracao_api.py 2026_04 --reset ADIPLANTEC     → reset total + filtro de admin
+    #   py extracao_api.py 2026_04 -b "C:\caminho\Scai.WMB"  → banco em outro caminho (default: <raiz>/Scai.WMB)
     _args = sys.argv[1:]
+
+    # Extrai --banco/-b <path> se presente (opcional)
+    # Sem ele, usa o padrao: <raiz>/Scai.WMB
+    _caminho_banco_arg = None
+    for _i in range(len(_args)):
+        if _args[_i] in ("--banco", "-b") and _i + 1 < len(_args):
+            _caminho_banco_arg = _args[_i + 1]
+            _args = _args[:_i] + _args[_i + 2:]
+            break
+
     primeiro_ciclo = "--reset" in _args
     _args = [a for a in _args if a != "--reset"]
 
@@ -3253,7 +3264,14 @@ if __name__ == "__main__":
          ORDER BY Tabela.NomeAdm, Tabela.LogAdm, Tabela.NomeCond, Tabela.Unidade DESC
     """
 
-    banco = aux.Banco(os.path.join(aux.caminhoprojeto(), 'Scai.WMB'))
+    # Usa caminho do --banco se passado, senao default <raiz>/Scai.WMB
+    caminho_banco = _caminho_banco_arg or os.path.join(aux.caminhoprojeto(), 'Scai.WMB')
+    if not os.path.isfile(caminho_banco):
+        console.print(f"[bold red]Erro:[/bold red] arquivo de banco nao encontrado: {caminho_banco}")
+        console.print(f"[dim]Use --banco <caminho> pra especificar outro arquivo[/dim]")
+        sys.exit(1)
+    console.print(f"[cyan][BD][/] Usando banco: {caminho_banco}")
+    banco = aux.Banco(caminho_banco)
     linhas = banco.consultar(SQL)
     total = len(linhas)
 

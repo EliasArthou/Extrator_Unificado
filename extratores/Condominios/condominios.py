@@ -25,7 +25,7 @@ Nomefuncao = 10
 ProblemaLogin = 11
 
 timeout = 10
-pastadownload = aux.caminhoprojeto('Downloads')
+pastadownload = aux.caminhoprojeto('Downloads') + '\\Condomínios'
 tempoesperadownload = 180
 mensagemerropadrao = 'Deu erro! Tentar novamente!'
 mensagemsemcondominio = "Condomínio não encontrado!"
