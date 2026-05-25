@@ -1379,8 +1379,11 @@ def _resolver_recaptcha_v2(page_url: str, sitekey: str) -> str | None:
 
     with _print_lock:
         console.print(f"[cyan]\\[CAPTCHA] Resolvendo reCAPTCHA v2...[/cyan]")
+    # Mostra contador a cada 5 segundos enquanto espera
     while not finalizado.wait(timeout=5):
-        pass  # Mantém a thread ativa pra o Live continuar atualizando
+        elapsed_parcial = _time.time() - inicio
+        with _print_lock:
+            console.print(f"[dim]\\[CAPTCHA] Aguardando... {_fmt(elapsed_parcial)}[/dim]")
 
     elapsed = _time.time() - inicio
 

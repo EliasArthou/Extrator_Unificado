@@ -14,7 +14,7 @@ from auxiliares import messagebox as msg
 import sys
 from extratores.Condominios import condominios
 from extratores.Prefeitura import Biptu
-from extratores.Bombeiros._legado import taxabombeiros as bombeiro
+from extratores.Prefeitura import Biptu_hibrido as Bh
 import pandas as pd
 from dotenv import load_dotenv
 
@@ -174,58 +174,61 @@ class Extrator:
 
     def extrairboletosbombeiro(self):
         """
-        : param caminhobanco: caminho do banco para realizar a pesquisa.
-        : param resposta: opção selecionada de extração.
-        : param visual: janela a ser manipulada.
-        """
+        Extrai boletos de bombeiros usando Playwright + AntiCaptcha.
 
-        # try:
-        # gerarboleto = not self.visual.somentevalores.get()
+        Migrado de Biptu.extrairbombeiros (Selenium, captcha manual via input())
+        para Biptu_hibrido.extrairbombeiros_hibrido (Playwright + AntiCaptcha
+        automatico + fallback IPTU).
+
+        PENDENTE (Pass 3) - regras de negocio nao migradas:
+          - Limite de horario 22h (site CBM nao gera apos esse horario)
+          - Cota unica vs parcelada
+          - Marcar Vencido vs Imposto Ano Corrente
+          - Tratamento explicito de cidades especiais (Macae, Sao Goncalo,
+            Campos dos Goytacazes)
+        """
+        from playwright.sync_api import sync_playwright
 
         self.listachaves = ['Cod Cliente', 'Nº CBMERJ', 'Área Construída', 'Utilização', 'Faixa', 'Proprietário', 'Endereço',
                             'taxa[anos_em_debito]', 'taxa[Exercicio]', 'taxa[Parcela]', 'taxa[Vencimento]', 'taxa[Valor]',
                             'taxa[Mora]', 'taxa[Total]', 'Status']
         self.listaexcel = []
-        # site = web.TratarSite(senha.siteCBM, senha.nomeprofileCBM)
 
-        for indice, linha in enumerate(self.resultado):
-            resolveucaptcha = False
-            # if aux.hora('America/Sao_Paulo', 'HORA') < datetime.time(23, 59, 00) and self.texto != 'Este serviço encontra-se temporariamente indisponível.':
-            codigocliente = linha[Biptu.Codigo]
-            # ==================== Parte Gráfica =======================================================
-            self.visual.mudartexto('labelcodigocliente', 'Código Cliente: ' + codigocliente)
-            cbm = str(linha[Biptu.NrCBM])
-            cbm = str(cbm.strip()).zfill(8)
-            cbm = '{}{}{}{}{}{}{}-{}'.format(*cbm)
-            self.visual.mudartexto('labelinscricao', 'Inscrição: ' + cbm)
-            self.visual.mudartexto('labelquantidade', 'Item ' + str(indice + 1) + ' de ' + str(len(self.resultado)) + '...')
-            self.visual.mudartexto('labelstatus', 'Extraindo boleto...')
-            # Atualiza a barra de progresso das transações (Views)
-            self.visual.configurarbarra('barraextracao', len(self.resultado), indice + 1)
-            time.sleep(0.1)
-            self.texto = ''
-            # Verifica a hora para entrar no site, caso esteja fora do horário válido, nem inicia
-            # if aux.hora('America/Sao_Paulo', 'HORA') < datetime.time(23, 59, 00):
-            dadosiptu, df = Biptu.extrairbombeiros(self, linha, aux.hora('America/Sao_Paulo', 'DATA'))
+        # Perfil Chrome dedicado pro CBM (mesma variavel que web.py usava)
+        profile_name = os.getenv("NOMEPROFILECBM", "cbm_profile")
+        profile_path = os.path.join(aux.caminhoprojeto(), "Profile", profile_name)
+        os.makedirs(profile_path, exist_ok=True)
 
-            # else:
-            #     # Mensagem de horário inválido para gerar boleto
-            #     self.visual.acertaconfjanela(False)
-            #     # Texto quando o serviço está indisponível
-            #     if self.texto != 'Este serviço encontra-se temporariamente indisponível.':
-            #         # Caso o erro não seja de serviço indisponível o horário é inválido
-            #         msg.msgbox('Impossível gerar boletos depois das 22:00!', msg.MB_OK, 'Horário Inválido')
-            #     else:
-            #         # Mensagem de serviço indisponível
-            #         msg.msgbox('Serviço fora do ar!', msg.MB_OK, 'Serviço com problemas')
+        with sync_playwright() as p:
+            context = p.chromium.launch_persistent_context(
+                user_data_dir=profile_path,
+                headless=True,
+                accept_downloads=True,
+            )
+            page = context.pages[0] if context.pages else context.new_page()
 
-                # Sai do Looping
-                # break
+            try:
+                for indice, linha in enumerate(self.resultado):
+                    codigocliente = linha[Biptu.Codigo]
+                    # ==================== Parte Gráfica =======================================================
+                    self.visual.mudartexto('labelcodigocliente', 'Código Cliente: ' + codigocliente)
+                    cbm = str(linha[Biptu.NrCBM])
+                    cbm = str(cbm.strip()).zfill(8)
+                    cbm = '{}{}{}{}{}{}{}-{}'.format(*cbm)
+                    self.visual.mudartexto('labelinscricao', 'Inscrição: ' + cbm)
+                    self.visual.mudartexto('labelquantidade', 'Item ' + str(indice + 1) + ' de ' + str(len(self.resultado)) + '...')
+                    self.visual.mudartexto('labelstatus', 'Extraindo boleto...')
+                    # Atualiza a barra de progresso das transações (Views)
+                    self.visual.configurarbarra('barraextracao', len(self.resultado), indice + 1)
+                    time.sleep(0.1)
+                    self.texto = ''
 
-        # except Exception as e:
-        #     with open("Log_" + aux.acertardataatual() + ".txt", "a") as myfile:
-        #         myfile.write(str(e))
-        #     msg.msgbox("Erro! Log salvo em: " + "Log_" + aux.acertardataatual() + ".txt", msg.MB_OK, 'Erro')
+                    dadosiptu, df = Bh.extrairbombeiros_hibrido(page, self, linha, aux.hora('America/Sao_Paulo', 'DATA'))
+            finally:
+                try:
+                    context.close()
+                except Exception:
+                    pass
 
     def extrairboletos(self):
         df = None
